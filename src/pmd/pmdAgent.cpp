@@ -94,7 +94,16 @@ static int pmdProcessAgentRequest ( char *pReceiveBuffer,
                rc = EDB_NO_ID ;
                goto error ;
             }
-            // insert record
+            // write-ahead log the operation, then apply it
+            if ( cb->isInTxn() )
+            {
+               rc = pmdGetKRCB()->getTxnMgr()->logOperation (
+                       cb->getTxnID(), TXN_OP_INSERT, insertor ) ;
+               if ( rc )
+               {
+                  goto error ;
+               }
+            }
             rc = rtnMgr->rtnInsert ( insertor ) ;
          }
          catch ( std::exception &e )
@@ -141,6 +150,15 @@ static int pmdProcessAgentRequest ( char *pReceiveBuffer,
          PD_LOG ( PDEVENT,
                   "Delete condition: %s",
                   recordID.toString().c_str() ) ;
+         if ( cb->isInTxn() )
+         {
+            rc = pmdGetKRCB()->getTxnMgr()->logOperation (
+                    cb->getTxnID(), TXN_OP_DELETE, recordID ) ;
+            if ( rc )
+            {
+               goto error ;
+            }
+         }
          rc = rtnMgr->rtnRemove ( recordID ) ;
       }
       else if ( OP_SNAPSHOT == opCode )
@@ -172,7 +190,47 @@ static int pmdProcessAgentRequest ( char *pReceiveBuffer,
       else if ( OP_DISCONNECT == opCode )
       {
          PD_LOG ( PDEVENT, "Receive disconnect msg" ) ;
+         if ( cb->isInTxn() )
+         {
+            pmdGetKRCB()->getTxnMgr()->rollback ( cb->getTxnID(), rtnMgr ) ;
+            cb->setInTxn ( false ) ;
+         }
          *disconnect = true ;
+      }
+      else if ( OP_TXN_BEGIN == opCode )
+      {
+         int txnID = 0 ;
+         rc = pmdGetKRCB()->getTxnMgr()->begin ( txnID ) ;
+         if ( EDB_OK == rc )
+         {
+            cb->setTxnID ( txnID ) ;
+            cb->setInTxn ( true ) ;
+         }
+      }
+      else if ( OP_TXN_COMMIT == opCode )
+      {
+         if ( cb->isInTxn() )
+         {
+            rc = pmdGetKRCB()->getTxnMgr()->commit ( cb->getTxnID() ) ;
+            cb->setInTxn ( false ) ;
+         }
+         else
+         {
+            rc = EDB_INVALIDARG ;
+         }
+      }
+      else if ( OP_TXN_ROLLBACK == opCode )
+      {
+         if ( cb->isInTxn() )
+         {
+            rc = pmdGetKRCB()->getTxnMgr()->rollback (
+                    cb->getTxnID(), rtnMgr ) ;
+            cb->setInTxn ( false ) ;
+         }
+         else
+         {
+            rc = EDB_INVALIDARG ;
+         }
       }
       else
       {

@@ -19,6 +19,7 @@
 #include "core.hpp"
 #include <bson/src/util/json.h>
 #include "ossSocket.hpp"
+#include "msg.hpp"
 #define COMMAND_QUIT         "quit"
 #define COMMAND_INSERT       "insert"
 #define COMMAND_QUERY        "query"
@@ -27,6 +28,9 @@
 #define COMMAND_CONNECT      "connect"
 #define COMMAND_TEST         "test"
 #define COMMAND_SNAPSHOT     "snapshot"
+#define CMD_TXN_BEGIN        "begin"
+#define CMD_TXN_COMMIT       "commit"
+#define CMD_TXN_ROLLBACK     "rollback"
 
 #define RECV_BUF_SIZE     4096
 #define SEND_BUF_SIZE     4096
@@ -119,5 +123,34 @@ class SnapshotCommand : public ICommand
    protected :
       int handleReply () ;
 };
+
+class SimpleOrderCommand : public ICommand
+{
+   public :
+      SimpleOrderCommand ( int opCode ) : _opCode(opCode) {}
+      int execute ( ossSocket & sock, std::vector<std::string> &argVec ) ;
+   protected :
+      int handleReply () ;
+   private :
+      int _opCode ;
+} ;
+
+class BeginCommand : public SimpleOrderCommand
+{
+   public :
+      BeginCommand () : SimpleOrderCommand(OP_TXN_BEGIN) {}
+} ;
+
+class CommitCommand : public SimpleOrderCommand
+{
+   public :
+      CommitCommand () : SimpleOrderCommand(OP_TXN_COMMIT) {}
+} ;
+
+class RollbackCommand : public SimpleOrderCommand
+{
+   public :
+      RollbackCommand () : SimpleOrderCommand(OP_TXN_ROLLBACK) {}
+} ;
 
 #endif

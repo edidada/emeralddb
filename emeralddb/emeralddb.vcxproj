@@ -118,6 +118,7 @@
     <ClCompile Include="..\src\oss\ossPrimitiveFileOp.cpp" />
     <ClCompile Include="..\src\oss\ossSocket.cpp" />
     <ClCompile Include="..\src\rtn\rtn.cpp" />
+    <ClCompile Include="..\src\txn\txn.cpp" />
     <ClCompile Include="..\src\win\emeralddb_win.cpp" />
     <ClCompile Include="..\src\win\msvc_stl_compat.cpp" />
   </ItemGroup>

@@ -133,6 +133,22 @@ public :
    {
       return _mgr ;
    }
+   inline bool isInTxn () const
+   {
+      return _inTxn ;
+   }
+   inline void setInTxn ( bool inTxn )
+   {
+      _inTxn = inTxn ;
+   }
+   inline int getTxnID () const
+   {
+      return _txnID ;
+   }
+   inline void setTxnID ( int id )
+   {
+      _txnID = id ;
+   }
 private :
    EDU_TYPES  _type ;
    pmdEDUMgr *_mgr ;
@@ -140,6 +156,8 @@ private :
    EDUID      _id ;
    bool       _isForced ;
    bool       _isDisconnected ;
+   bool       _inTxn ;
+   int        _txnID ;
    ossQueue<pmdEDUEvent> _queue ;
 } ;
 

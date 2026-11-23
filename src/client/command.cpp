@@ -27,6 +27,9 @@ COMMAND_ADD(COMMAND_CONNECT,ConnectCommand)
 COMMAND_ADD(COMMAND_QUIT, QuitCommand)
 COMMAND_ADD(COMMAND_HELP, HelpCommand)
 COMMAND_ADD(COMMAND_SNAPSHOT, SnapshotCommand)
+COMMAND_ADD(CMD_TXN_BEGIN, BeginCommand)
+COMMAND_ADD(CMD_TXN_COMMIT, CommitCommand)
+COMMAND_ADD(CMD_TXN_ROLLBACK, RollbackCommand)
 COMMAND_END
 
 extern int gQuit;
@@ -374,6 +377,9 @@ int HelpCommand::execute( ossSocket & sock, std::vector<std::string> & argVec )
    printf("%s -- sending a delete command to emeralddb server\n", COMMAND_DELETE);
    printf("%s [number]-- sending a test command to emeralddb server\n", COMMAND_TEST);
    printf("%s -- providing current number of record inserting\n", COMMAND_SNAPSHOT);
+   printf("%s -- beginning a transaction\n", CMD_TXN_BEGIN);
+   printf("%s -- committing the current transaction\n", CMD_TXN_COMMIT);
+   printf("%s -- rolling back the current transaction\n", CMD_TXN_ROLLBACK);
    printf("%s -- quitting command\n\n", COMMAND_QUIT);
    printf("Type \"help\" command for help\n");
    return ret;
@@ -417,4 +423,31 @@ done :
    return rc;
 error :
    goto done ;
+}
+
+/******************************Transaction commands****************************/
+int SimpleOrderCommand::execute ( ossSocket & sock,
+                                  std::vector<std::string> & argVec )
+{
+   if ( !sock.isConnected() )
+   {
+      return getError(EDB_SOCK_NOT_CONNECT) ;
+   }
+   int rc = sendOrder ( sock, _opCode ) ;
+   if ( rc )
+   {
+      return rc ;
+   }
+   rc = recvReply ( sock ) ;
+   if ( rc )
+   {
+      return rc ;
+   }
+   return handleReply() ;
+}
+
+int SimpleOrderCommand::handleReply ()
+{
+   MsgReply *msg = (MsgReply*)_recvBuf ;
+   return getError ( msg->returnCode ) ;
 }

@@ -67,7 +67,9 @@ _mgr(mgr),
 _status(PMD_EDU_CREATING),
 _id(0),
 _isForced(false),
-_isDisconnected(false)
+_isDisconnected(false),
+_inTxn(false),
+_txnID(0)
 {
 }
 

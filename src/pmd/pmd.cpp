@@ -27,6 +27,17 @@ int EDB_KRCB::init ( pmdOptions *options )
    strncpy ( _pdDiagLogPath, getLogFilePath(), sizeof(_pdDiagLogPath) ) ;
    setSvcName ( options->getServiceName () ) ;
    setMaxPool ( options->getMaxPool () ) ;
-   return _rtnMgr.rtnInitialize ( getDataFilePath() ) ;
+   int rc = _rtnMgr.rtnInitialize ( getDataFilePath() ) ;
+   if ( rc )
+   {
+      return rc ;
+   }
+   std::string walPath = std::string ( getDataFilePath() ) + ".wal" ;
+   rc = _txnMgr.initialize ( walPath.c_str() ) ;
+   if ( rc )
+   {
+      return rc ;
+   }
+   return _txnMgr.recover ( &_rtnMgr ) ;
 }
 
