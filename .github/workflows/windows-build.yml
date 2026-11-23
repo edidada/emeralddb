@@ -50,7 +50,7 @@ jobs:
         run: |
           cd boost
           call bootstrap.bat msvc
-          b2 --with-thread --with-program_options --with-date_time --with-system link=static runtime-link=static threading=multi variant=debug toolset=msvc stage
+          b2 --with-thread --with-program_options --with-date_time --with-system link=static runtime-link=static threading=multi variant=debug toolset=msvc cxxflags=/MTd stage
 
       # Boost 1.49 auto-link expects the vc110 library names; newer toolsets
       # produce a different toolset tag, so mirror the libs under that name.
