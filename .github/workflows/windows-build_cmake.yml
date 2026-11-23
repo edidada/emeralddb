@@ -1,4 +1,4 @@
-name: Windows Build
+name: Windows CMake Build
 
 on:
   push:
@@ -19,9 +19,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
 
       - name: Setup MSVC x86 environment
         uses: ilammy/msvc-dev-cmd@v1
@@ -53,20 +50,10 @@ jobs:
           call bootstrap.bat msvc
           b2 --with-thread --with-program_options --with-date_time --with-system link=static runtime-link=shared threading=multi variant=debug toolset=msvc stage
 
-      # Boost 1.49 auto-link expects the vc110 library names; newer toolsets
-      # produce a different toolset tag, so mirror the libs under that name.
-      - name: Normalize Boost library names
-        shell: pwsh
-        run: |
-          Get-ChildItem boost\stage\lib\*.lib | ForEach-Object {
-            $name = $_.BaseName -replace 'vc\d*-', 'vc110-'
-            if (-not $name.StartsWith('lib')) { $name = 'lib' + $name }
-            $target = Join-Path $_.DirectoryName ($name + '.lib')
-            if ($target -ne $_.FullName) { Copy-Item $_.FullName $target -Force }
-          }
-
-      - name: Build solution
+      - name: Configure with CMake
         shell: cmd
-        run: |
-          set LINK=/LIBPATH:%GITHUB_WORKSPACE%\boost\stage\lib
-          msbuild emeralddb.sln /p:Configuration=Debug /p:Platform=Win32 /p:PlatformToolset=v143 /m /verbosity:minimal
+        run: cmake -S . -B build -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build with CMake
+        shell: cmd
+        run: cmake --build build --config Debug
