@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         # Multiple Linux and macOS images / versions
-        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-latest]
+        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-latest, macos-15, macos-26, macos-15-intel, macos-26-intel]
 
     steps:
       - name: Checkout
@@ -30,11 +30,10 @@ jobs:
           tar -xjf boost.tar.bz2
           mv boost_1_49_0 boost
 
-          # TIME_UTC from libc conflicts with the Boost 1.49 enum; both the
-          # public headers and Boost.Thread's own sources use the historical
-          # TIME_UTC_ spelling.
-          grep -rl 'TIME_UTC' boost/boost/thread boost/libs/thread/src | \
-            xargs perl -pi -e 's/\bTIME_UTC\b/TIME_UTC_/g'
+          # TIME_UTC from libc conflicts with the Boost 1.49 enum; the
+          # sources expect the historical TIME_UTC_ spelling.
+          perl -pi -e 's/TIME_UTC=1/TIME_UTC_=1/; s/clock_type == TIME_UTC/clock_type == TIME_UTC_/' \
+            boost/boost/thread/xtime.hpp
 
           cd boost
           if [ "$RUNNER_OS" = "macOS" ]; then
