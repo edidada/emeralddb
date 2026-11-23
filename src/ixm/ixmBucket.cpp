@@ -56,8 +56,10 @@ int ixmBucketManager::createIndex ( BSONObj &record, dmsRecordID &recordID )
    PD_RC_CHECK ( rc, PDERROR, "Failed to create index, rc = %d", rc ) ;
    recordID = eleHash.recordID ;
    // keep the index durable; a failed append is reported to the caller
-   BSONElement element ( eleHash.data ) ;
-   rc = appendEntry ( IXM_IDX_OP_INSERT, element, random, hashNum, recordID ) ;
+   {
+      BSONElement element ( eleHash.data ) ;
+      rc = appendEntry ( IXM_IDX_OP_INSERT, element, random, hashNum, recordID ) ;
+   }
    PD_RC_CHECK ( rc, PDERROR, "Failed to persist index entry, rc = %d", rc ) ;
 done :
    return rc ;
@@ -95,8 +97,10 @@ int ixmBucketManager::removeIndex ( BSONObj &record, dmsRecordID &recordID )
    PD_RC_CHECK ( rc, PDERROR, "Failed to remove index, rc = %d", rc ) ;
    recordID._pageID = eleHash.recordID._pageID ;
    recordID._slotID = eleHash.recordID._slotID ;
-   BSONElement element ( eleHash.data ) ;
-   rc = appendEntry ( IXM_IDX_OP_DELETE, element, random, hashNum, recordID ) ;
+   {
+      BSONElement element ( eleHash.data ) ;
+      rc = appendEntry ( IXM_IDX_OP_DELETE, element, random, hashNum, recordID ) ;
+   }
    PD_RC_CHECK ( rc, PDERROR, "Failed to persist index removal, rc = %d", rc ) ;
 done :
    return rc ;
