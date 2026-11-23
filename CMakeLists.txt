@@ -17,7 +17,9 @@ set(INC_DIRS
 
 # Boost 1.49 is built by CI into boost/stage/lib. Auto-linking is disabled
 # above, so link the produced archives directly.
-file(GLOB BOOST_LIBS "${CMAKE_CURRENT_SOURCE_DIR}/boost/stage/lib/*.lib")
+file(GLOB BOOST_LIBS
+   "${CMAKE_CURRENT_SOURCE_DIR}/boost/stage/lib/*.lib"
+   "${CMAKE_CURRENT_SOURCE_DIR}/boost/stage/lib/*.a")
 
 set(BSON_SOURCES
    "${SRC_DIR}/bson/src/bsonobj.cpp"
@@ -68,7 +70,11 @@ add_executable(client
 
 foreach(target emeralddb client)
    target_include_directories(${target} PRIVATE ${INC_DIRS})
+   target_link_libraries(${target} PRIVATE ${BOOST_LIBS})
    if(WIN32)
-      target_link_libraries(${target} PRIVATE ${BOOST_LIBS} ws2_32)
+      target_link_libraries(${target} PRIVATE ws2_32)
+   else()
+      find_package(Threads REQUIRED)
+      target_link_libraries(${target} PRIVATE Threads::Threads)
    endif()
 endforeach()

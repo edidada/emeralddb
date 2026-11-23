@@ -1,0 +1,52 @@
+name: Linux/Macos CMake Build
+
+on:
+  push:
+    branches: [ "edidada/cmake" ]
+  pull_request:
+    branches: [ "edidada/cmake" ]
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Multiple Linux and macOS images / versions
+        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-latest,
+             macos-13, macos-14, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # The code uses boost::xtime / Spirit Classic, which were removed in
+      # newer Boost releases, so a Boost 1.49.0 source tree is required.
+      - name: Download and build Boost 1.49.0
+        shell: bash
+        run: |
+          curl -fsSL -o boost.tar.bz2 \
+            https://archives.boost.io/release/1.49.0/source/boost_1_49_0.tar.bz2
+          tar -xjf boost.tar.bz2
+          mv boost_1_49_0 boost
+          cd boost
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            ./bootstrap.sh --with-toolset=clang \
+              --with-libraries=thread,program_options,date_time,system
+            ./b2 -j4 toolset=clang link=static runtime-link=shared \
+              threading=multi variant=debug stage
+          else
+            ./bootstrap.sh \
+              --with-libraries=thread,program_options,date_time,system
+            ./b2 -j4 link=static runtime-link=shared \
+              threading=multi variant=debug stage
+          fi
+
+      - name: Configure with CMake
+        shell: bash
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build with CMake
+        shell: bash
+        run: cmake --build build -j4
