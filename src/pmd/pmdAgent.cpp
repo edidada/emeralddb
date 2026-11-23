@@ -253,7 +253,7 @@ int pmdAgentEntryPoint ( pmdEDUCB *cb, void *arg )
 
    // receive socket from argument
    int s                 = *(( int *) &arg ) ;
-   ossSocket sock ( &s ) ;
+   ossSocket sock ( reinterpret_cast<SOCKET *>( &s ) ) ;
    sock.disableNagle () ;
 
    // allocate memory for receive buffer

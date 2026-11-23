@@ -41,15 +41,15 @@ const char* getPDLevelDesp ( PDLEVEL level )
 
 const static char *PD_LOG_HEADER_FORMAT="%04d-%02d-%02d-%02d.%02d.%02d.%06d\
                \
-	Level:%s"OSS_NEWLINE"PID:%-37luTID:%lu"OSS_NEWLINE"Function:%-32sLine:%u"\
-	OSS_NEWLINE"File:%s"OSS_NEWLINE"Message:"OSS_NEWLINE"%s"OSS_NEWLINE OSS_NEWLINE;
+	Level:%s" OSS_NEWLINE "PID:%-37luTID:%lu" OSS_NEWLINE "Function:%-32sLine:%u"\
+	OSS_NEWLINE"File:%s" OSS_NEWLINE "Message:" OSS_NEWLINE "%s" OSS_NEWLINE OSS_NEWLINE;
 
 #else
 
 const static char *PD_LOG_HEADER_FORMAT="%04d-%02d-%02d-%02d.%02d.%02d.%06d\
 										\
-	Level:%s"OSS_NEWLINE"PID:%-37dTID:%d"OSS_NEWLINE"Function:%-32sLine:%d"\
-	OSS_NEWLINE"File:%s"OSS_NEWLINE"Message:"OSS_NEWLINE"%s"OSS_NEWLINE OSS_NEWLINE;
+	Level:%s" OSS_NEWLINE "PID:%-37dTID:%d" OSS_NEWLINE "Function:%-32sLine:%d"\
+	OSS_NEWLINE"File:%s" OSS_NEWLINE "Message:" OSS_NEWLINE "%s" OSS_NEWLINE OSS_NEWLINE;
 #endif
 
 PDLEVEL _curPDLevel = PD_DFT_DIAGLEVEL ;
@@ -66,7 +66,7 @@ static int _pdLogFileReopen ()
    rc = _pdLogFile.Open ( _pdDiagLogPath ) ;
    if ( rc )
    {
-      printf ( "Failed to open log file, errno = %d"OSS_NEWLINE, rc ) ;
+      printf ( "Failed to open log file, errno = %d" OSS_NEWLINE , rc ) ;
       goto error ;
    }
    _pdLogFile.seekToEnd () ;
@@ -88,7 +88,7 @@ static int _pdLogFileWrite ( const char *pData )
       rc = _pdLogFileReopen () ;
       if ( rc )
       {
-         printf ( "Failed to open log file, errno = %d"OSS_NEWLINE,
+         printf ( "Failed to open log file, errno = %d" OSS_NEWLINE ,
                   rc ) ;
          goto error ;
       }
@@ -97,7 +97,7 @@ static int _pdLogFileWrite ( const char *pData )
    rc = _pdLogFile.Write ( pData, dataSize ) ;
    if ( rc )
    {
-      printf ( "Failed to write into log file, errno = %d"OSS_NEWLINE,
+      printf ( "Failed to write into log file, errno = %d" OSS_NEWLINE ,
                rc ) ;
       goto error ;
    }
@@ -171,14 +171,14 @@ void pdLog ( PDLEVEL level, const char *func, const char *file,
               userInfo
    ) ;
 #endif // _WINDOWS
-   printf ( "%s"OSS_NEWLINE, sysInfo ) ;
+   printf ( "%s" OSS_NEWLINE , sysInfo ) ;
    if ( _pdDiagLogPath[0] != '\0' )
    {
       rc = _pdLogFileWrite ( sysInfo ) ;
       if ( rc )
       {
-         printf ( "Failed to write into log file, errno = %d"OSS_NEWLINE, rc ) ;
-         printf ( "%s"OSS_NEWLINE, sysInfo ) ;
+         printf ( "Failed to write into log file, errno = %d" OSS_NEWLINE , rc ) ;
+         printf ( "%s" OSS_NEWLINE , sysInfo ) ;
       }
    }
    return ;

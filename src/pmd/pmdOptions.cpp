@@ -78,7 +78,7 @@ int pmdOptions::importVM ( const po::variables_map &vm, bool isDefault )
    }
    else if ( isDefault )
    {
-      strcpy ( _confPath, "./"CONFFILENAME ) ;
+      strcpy ( _confPath, "./" CONFFILENAME ) ;
    }
    // log path
    if ( vm.count ( PMD_OPTION_LOGPATH ) )
@@ -88,7 +88,7 @@ int pmdOptions::importVM ( const po::variables_map &vm, bool isDefault )
    }
    else if ( isDefault )
    {
-      strcpy ( _logPath, "./"LOGFILENAME ) ;
+      strcpy ( _logPath, "./" LOGFILENAME ) ;
    }
    // db file path
    if ( vm.count ( PMD_OPTION_DBPATH ) )
@@ -98,7 +98,7 @@ int pmdOptions::importVM ( const po::variables_map &vm, bool isDefault )
    }
    else if ( isDefault )
    {
-      strcpy ( _dbPath, "./"DBFILENAME ) ;
+      strcpy ( _dbPath, "./" DBFILENAME ) ;
    }
 
    // svcname
