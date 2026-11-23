@@ -1,0 +1,36 @@
+name: Windows Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows Server 2022, 2025 and the current latest image
+        os: [windows-2022, windows-2025, windows-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      # The code uses boost::xtime / Spirit Classic, which were removed in
+      # newer Boost releases, so a Boost 1.49.0 header tree is required.
+      - name: Download Boost 1.49.0
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://archives.boost.io/release/1.49.0/source/boost_1_49_0.7z" -OutFile boost.7z
+          & "C:\Program Files\7-Zip\7z.exe" x boost.7z -y | Out-Null
+          Move-Item -Path boost_1_49_0 -Destination boost
+
+      - name: Build solution
+        shell: cmd
+        run: msbuild emeralddb.sln /p:Configuration=Debug /p:Platform=Win32 /m /verbosity:minimal
