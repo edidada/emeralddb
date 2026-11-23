@@ -18,6 +18,8 @@
 #include "ossLatch.hpp"
 #include "bson.h"
 #include <map>
+#include <cstdio>
+#include <cstdlib>
 #include "dmsRecord.hpp"
 using namespace bson ;
 
@@ -54,9 +56,14 @@ private:
                       unsigned int &random ) ;
 private :
    std::vector<ixmBucket *>_bucket ;
+   FILE *_persistFile ;
+   std::vector<char *> _ownedKeys ;
+   bool _persisted ;
 public :
    ixmBucketManager ()
    {
+      _persistFile = NULL ;
+      _persisted   = false ;
    }
    ~ixmBucketManager ()
    {
@@ -67,8 +74,28 @@ public :
          if ( pIxmBucket )
             delete pIxmBucket ;
       }
+      for ( size_t i = 0; i < _ownedKeys.size(); ++i )
+      {
+         free ( _ownedKeys[i] ) ;
+      }
+      if ( _persistFile )
+      {
+         fclose ( _persistFile ) ;
+      }
    }
-   int initialize () ;
+   // Load the in-memory buckets from the on-disk index log. When no valid
+   // index file exists the caller must rebuild the index from the data file.
+   int initialize ( const char *indexFile = NULL ) ;
+   bool hasPersistedIndex () const
+   {
+      return _persisted ;
+   }
+private :
+   int loadFromDisk ( const char *path ) ;
+   int appendEntry ( unsigned char op, const BSONElement &element,
+                     unsigned int bucket, unsigned int hashNum,
+                     const dmsRecordID &rid ) ;
+public :
    int isIDExist ( BSONObj &record ) ;
    int createIndex ( BSONObj &record, dmsRecordID &recordID ) ;
    int findIndex ( BSONObj &record, dmsRecordID &recordID ) ;

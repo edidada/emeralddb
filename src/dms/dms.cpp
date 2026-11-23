@@ -321,7 +321,7 @@ getfilesize:
       goto getfilesize ;
    }
    // load data
-   rc = _loadData () ;
+   rc = _loadData ( !_ixmBucketMgr->hasPersistedIndex() ) ;
    PD_RC_CHECK ( rc, PDERROR, "Failed to load data, rc = %d", rc ) ;
 done :
    return rc ;
@@ -476,7 +476,7 @@ error :
    goto done ;
 }
 
-int dmsFile::_loadData ()
+int dmsFile::_loadData ( bool rebuildIndex )
 {
    int rc                    = EDB_OK ;
    int numPage               = 0 ;
@@ -523,21 +523,25 @@ int dmsFile::_loadData ()
             slotID = ( SLOTID ) pageHeader->_numSlots ;
             recordID._pageID = (PAGEID) k ;
             // for each record in the page, let's insert into index
-            for ( unsigned int s = 0; s < slotID; ++s )
+            // (skip when the index was loaded from its own persisted log)
+            if ( rebuildIndex )
             {
-               slotOffset = *(SLOTOFF*)(data+k*DMS_PAGESIZE +
-                            sizeof(dmsPageHeader ) + s*sizeof(SLOTID) ) ;
-               if ( DMS_SLOT_EMPTY == slotOffset )
+               for ( unsigned int s = 0; s < slotID; ++s )
                {
-                  continue ;
+                  slotOffset = *(SLOTOFF*)(data+k*DMS_PAGESIZE +
+                               sizeof(dmsPageHeader ) + s*sizeof(SLOTID) ) ;
+                  if ( DMS_SLOT_EMPTY == slotOffset )
+                  {
+                     continue ;
+                  }
+                  bson = BSONObj ( data + k*DMS_PAGESIZE +
+                                   slotOffset + sizeof(dmsRecord) ) ;
+                  recordID._slotID = (SLOTID)s ;
+                  rc = _ixmBucketMgr->isIDExist ( bson ) ;
+                  PD_RC_CHECK ( rc, PDERROR, "Failed to call isIDExist, rc = %d", rc ) ;
+                  rc = _ixmBucketMgr->createIndex ( bson, recordID ) ;
+                  PD_RC_CHECK ( rc, PDERROR, "Failed to call ixm createIndex, rc = %d", rc ) ;
                }
-               bson = BSONObj ( data + k*DMS_PAGESIZE +
-                                slotOffset + sizeof(dmsRecord) ) ;
-               recordID._slotID = (SLOTID)s ;
-               rc = _ixmBucketMgr->isIDExist ( bson ) ;
-               PD_RC_CHECK ( rc, PDERROR, "Failed to call isIDExist, rc = %d", rc ) ;
-               rc = _ixmBucketMgr->createIndex ( bson, recordID ) ;
-               PD_RC_CHECK ( rc, PDERROR, "Failed to call ixm createIndex, rc = %d", rc ) ;
             }
          }
       } // for ( int i = 0; i < numSegments; ++i )

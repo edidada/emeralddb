@@ -17,6 +17,7 @@
 #include "pd.hpp"
 #include "ossHash.hpp"
 #include "ixmBucket.hpp"
+#include "ixmPersist.hpp"
 
 int ixmBucketManager::isIDExist ( BSONObj &record )
 {
@@ -54,6 +55,10 @@ int ixmBucketManager::createIndex ( BSONObj &record, dmsRecordID &recordID )
    rc = _bucket[random]->createIndex ( hashNum, eleHash ) ;
    PD_RC_CHECK ( rc, PDERROR, "Failed to create index, rc = %d", rc ) ;
    recordID = eleHash.recordID ;
+   // keep the index durable; a failed append is reported to the caller
+   BSONElement element ( eleHash.data ) ;
+   rc = appendEntry ( IXM_IDX_OP_INSERT, element, random, hashNum, recordID ) ;
+   PD_RC_CHECK ( rc, PDERROR, "Failed to persist index entry, rc = %d", rc ) ;
 done :
    return rc ;
 error :
@@ -90,6 +95,9 @@ int ixmBucketManager::removeIndex ( BSONObj &record, dmsRecordID &recordID )
    PD_RC_CHECK ( rc, PDERROR, "Failed to remove index, rc = %d", rc ) ;
    recordID._pageID = eleHash.recordID._pageID ;
    recordID._slotID = eleHash.recordID._slotID ;
+   BSONElement element ( eleHash.data ) ;
+   rc = appendEntry ( IXM_IDX_OP_DELETE, element, random, hashNum, recordID ) ;
+   PD_RC_CHECK ( rc, PDERROR, "Failed to persist index removal, rc = %d", rc ) ;
 done :
    return rc ;
 error :
@@ -253,7 +261,122 @@ error :
    goto done ;
 }
 
-int ixmBucketManager::initialize ()
+int ixmBucketManager::appendEntry ( unsigned char op,
+                                     const BSONElement &element,
+                                     unsigned int bucket,
+                                     unsigned int hashNum,
+                                     const dmsRecordID &rid )
+{
+   if ( !_persistFile )
+   {
+      return EDB_OK ;
+   }
+   unsigned int keyLen  = (unsigned int)element.size() ;
+   const char *key      = element.rawdata() ;
+   unsigned char type   = (unsigned char)element.type() ;
+   if ( fwrite ( &bucket, sizeof(bucket), 1, _persistFile ) != 1 ||
+        fwrite ( &hashNum, sizeof(hashNum), 1, _persistFile ) != 1 ||
+        fwrite ( &rid._pageID, sizeof(rid._pageID), 1, _persistFile ) != 1 ||
+        fwrite ( &rid._slotID, sizeof(rid._slotID), 1, _persistFile ) != 1 ||
+        fwrite ( &keyLen, sizeof(keyLen), 1, _persistFile ) != 1 ||
+        fwrite ( &op, sizeof(op), 1, _persistFile ) != 1 ||
+        fwrite ( &type, sizeof(type), 1, _persistFile ) != 1 ||
+        fwrite ( key, 1, keyLen, _persistFile ) != keyLen )
+   {
+      return EDB_IO ;
+   }
+   fflush ( _persistFile ) ;
+   return EDB_OK ;
+}
+
+int ixmBucketManager::loadFromDisk ( const char *path )
+{
+   FILE *file = fopen ( path, "rb" ) ;
+   if ( !file )
+   {
+      return EDB_IO ;
+   }
+   char magic[9] = {0} ;
+   unsigned int version = 0 ;
+   if ( fread ( magic, 1, 8, file ) != 8 ||
+        strcmp ( magic, IXM_INDEX_MAGIC ) ||
+        fread ( &version, sizeof(version), 1, file ) != 1 ||
+        version != IXM_INDEX_VERSION )
+   {
+      fclose ( file ) ;
+      return EDB_INVALIDARG ;
+   }
+   while ( true )
+   {
+      unsigned int bucket = 0, hash = 0, pageID = 0, slotID = 0, keyLen = 0 ;
+      unsigned char op = 0, type = 0 ;
+      if ( fread ( &bucket, sizeof(bucket), 1, file ) != 1 )
+      {
+         break ; // normal end of the append-only log
+      }
+      if ( fread ( &hash, sizeof(hash), 1, file ) != 1 ||
+           fread ( &pageID, sizeof(pageID), 1, file ) != 1 ||
+           fread ( &slotID, sizeof(slotID), 1, file ) != 1 ||
+           fread ( &keyLen, sizeof(keyLen), 1, file ) != 1 ||
+           fread ( &op, sizeof(op), 1, file ) != 1 ||
+           fread ( &type, sizeof(type), 1, file ) != 1 ||
+           keyLen == 0 || keyLen > 4096 )
+      {
+         fclose ( file ) ;
+         return EDB_INVALIDARG ;
+      }
+      char *key = (char*)malloc ( keyLen + 1 ) ;
+      if ( !key )
+      {
+         fclose ( file ) ;
+         return EDB_OOM ;
+      }
+      if ( fread ( key, 1, keyLen, file ) != keyLen )
+      {
+         free ( key ) ;
+         fclose ( file ) ;
+         return EDB_INVALIDARG ;
+      }
+      key[keyLen] = 0 ;
+      ixmEleHash eleHash ;
+      eleHash.data = key ;
+      eleHash.recordID._pageID = pageID ;
+      eleHash.recordID._slotID = slotID ;
+      int rc = EDB_OK ;
+      if ( IXM_IDX_OP_INSERT == op )
+      {
+         rc = _bucket[bucket % IXM_HASH_MAP_SIZE]->createIndex ( hash, eleHash ) ;
+         if ( EDB_OK == rc )
+         {
+            _ownedKeys.push_back ( key ) ;
+         }
+      }
+      else if ( IXM_IDX_OP_DELETE == op )
+      {
+         rc = _bucket[bucket % IXM_HASH_MAP_SIZE]->removeIndex ( hash, eleHash ) ;
+      }
+      if ( rc )
+      {
+         free ( key ) ;
+         fclose ( file ) ;
+         return rc ;
+      }
+      if ( IXM_IDX_OP_DELETE == op )
+      {
+         free ( key ) ;
+      }
+   }
+   fclose ( file ) ;
+   _persistFile = fopen ( path, "ab" ) ;
+   if ( !_persistFile )
+   {
+      return EDB_IO ;
+   }
+   _persisted = true ;
+   return EDB_OK ;
+}
+
+int ixmBucketManager::initialize ( const char *indexFile )
 {
    int rc = EDB_OK ;
    ixmBucket *temp = NULL ;
@@ -268,6 +391,26 @@ int ixmBucketManager::initialize ()
       }
       _bucket.push_back ( temp ) ;
       temp = NULL ;
+   }
+   if ( indexFile )
+   {
+      rc = loadFromDisk ( indexFile ) ;
+      if ( EDB_OK != rc )
+      {
+         // No usable index yet: start a fresh log and let DMS rebuild the
+         // buckets from the data file.
+         FILE *file = fopen ( indexFile, "wb" ) ;
+         if ( file )
+         {
+            unsigned int version = IXM_INDEX_VERSION ;
+            fwrite ( IXM_INDEX_MAGIC, 1, 8, file ) ;
+            fwrite ( &version, sizeof(version), 1, file ) ;
+            fclose ( file ) ;
+            _persistFile = fopen ( indexFile, "ab" ) ;
+         }
+         _persisted = false ;
+         rc = EDB_OK ;
+      }
    }
 done:
    return rc ;

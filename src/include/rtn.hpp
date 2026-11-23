@@ -30,7 +30,7 @@ private :
 public :
    rtn () ;
    ~rtn() ;
-   int rtnInitialize () ;
+   int rtnInitialize ( const char *dbPath = NULL ) ;
    int rtnInsert ( bson::BSONObj &record ) ;
    int rtnFind ( bson::BSONObj &inRecord, bson::BSONObj &outRecord ) ;
    int rtnRemove ( bson::BSONObj &record ) ;

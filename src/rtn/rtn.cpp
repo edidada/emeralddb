@@ -38,9 +38,14 @@ rtn::~rtn()
    }
 }
 
-int rtn::rtnInitialize ()
+int rtn::rtnInitialize ( const char *dbPath )
 {
    int rc = EDB_OK ;
+   std::string indexPath ;
+   if ( dbPath )
+   {
+      indexPath = std::string ( dbPath ) + ".idx" ;
+   }
    _ixmBucketMgr = new ( std::nothrow ) ixmBucketManager () ;
    if ( !_ixmBucketMgr )
    {
@@ -55,7 +60,7 @@ int rtn::rtnInitialize ()
       PD_LOG ( PDERROR, "Failed to new dms file" ) ;
       goto error ;
    }
-   rc = _ixmBucketMgr->initialize () ;
+   rc = _ixmBucketMgr->initialize ( indexPath.empty() ? NULL : indexPath.c_str() ) ;
    if ( rc )
    {
       PD_LOG ( PDERROR, "Failed to call bucketMgr initialize, rc = %d", rc ) ;

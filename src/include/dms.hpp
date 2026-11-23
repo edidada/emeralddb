@@ -126,7 +126,7 @@ private :
    // extend the file for given bytes
    int _extendFile ( int size ) ;
    // load data from beginning
-   int _loadData () ;
+   int _loadData ( bool rebuildIndex = true ) ;
    // search slot
    int _searchSlot ( char *page,
                      dmsRecordID &recordID,
