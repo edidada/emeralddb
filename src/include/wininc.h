@@ -27,7 +27,8 @@ unsigned getpid(void);
 unsigned pthread_self();
 struct tm *localtime_r(const time_t *timer, struct tm *result);
 
-#define snprintf	sprintf_s
+// Modern MSVC/UCRT provides a standards-compliant snprintf; the old
+// mapping to sprintf_s conflicts with the declaration in <stdio.h>.
 
 #endif // _WINDOWS
 

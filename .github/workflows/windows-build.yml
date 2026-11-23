@@ -31,6 +31,15 @@ jobs:
           & "C:\Program Files\7-Zip\7z.exe" x boost.7z -y | Out-Null
           Move-Item -Path boost_1_49_0 -Destination boost
 
+          # Boost 1.49 names the clock enum TIME_UTC, which collides with the
+          # TIME_UTC macro from the current Windows SDK. The project expects
+          # the historical TIME_UTC_ spelling, so rename it in the header.
+          $xtime = "boost/boost/thread/xtime.hpp"
+          $text = Get-Content -Path $xtime -Raw
+          $text = $text.Replace("TIME_UTC=1", "TIME_UTC_=1")
+          $text = $text.Replace("clock_type == TIME_UTC", "clock_type == TIME_UTC_")
+          Set-Content -Path $xtime -Value $text -NoNewline
+
       - name: Build solution
         shell: cmd
         run: msbuild emeralddb.sln /p:Configuration=Debug /p:Platform=Win32 /p:PlatformToolset=v143 /p:WindowsTargetPlatformVersion=10.0 /m /verbosity:minimal
