@@ -58,7 +58,7 @@ jobs:
         shell: pwsh
         run: |
           Get-ChildItem boost\stage\lib\*.lib | ForEach-Object {
-            $name = $_.BaseName -replace 'vc\d+', 'vc110'
+            $name = $_.BaseName -replace 'vc\d*-', 'vc110-'
             if (-not $name.StartsWith('lib')) { $name = 'lib' + $name }
             $target = Join-Path $_.DirectoryName ($name + '.lib')
             if ($target -ne $_.FullName) { Copy-Item $_.FullName $target -Force }

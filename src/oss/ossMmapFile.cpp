@@ -16,6 +16,10 @@
 #include "ossMmapFile.hpp"
 #include "pd.hpp"
 
+#ifdef _WINDOWS
+#include <io.h>
+#endif
+
 using namespace std ;
 int _ossMmapFile::open ( const char * pFilename,
                          unsigned int options )
@@ -45,7 +49,11 @@ void _ossMmapFile::close ()
    for ( vector<ossMmapSegment>::iterator i = _segments.begin() ;
          i != _segments.end(); i++ )
    {
+#ifdef _WINDOWS
+      UnmapViewOfFile ( (void*)(*i)._ptr ) ;
+#else
       munmap ((void*)(*i)._ptr, (*i)._length ) ;
+#endif
    }
    _segments.clear () ;
    if ( _opened )
@@ -67,7 +75,7 @@ int _ossMmapFile::map ( unsigned long long offset,
    void *segment = NULL ;
    if ( 0 == length )
       goto done ;
-   rc = _fileOp.getSize ((off_t*)&fileSize ) ;
+   rc = _fileOp.getSize ((offsetType*)&fileSize ) ;
    if ( rc )
    {
       PD_LOG ( PDERROR,
@@ -82,6 +90,30 @@ int _ossMmapFile::map ( unsigned long long offset,
       goto error ;
    }
    // map region into memory
+#ifdef _WINDOWS
+   {
+      HANDLE fileHandle = (HANDLE)_get_osfhandle ( _fileOp.getHandle() ) ;
+      HANDLE mapHandle = CreateFileMapping ( fileHandle, NULL, PAGE_READWRITE,
+                                             0, 0, NULL ) ;
+      if ( !mapHandle )
+      {
+         PD_LOG ( PDERROR, "Failed to create file mapping, errno = %d",
+                  GetLastError() ) ;
+         rc = EDB_SYS ;
+         goto error ;
+      }
+      segment = MapViewOfFile ( mapHandle, FILE_MAP_ALL_ACCESS,
+                                (DWORD)(offset >> 32), (DWORD)offset, length ) ;
+      CloseHandle ( mapHandle ) ;
+      if ( !segment )
+      {
+         PD_LOG ( PDERROR, "Failed to map offset %llu length %d, errno = %d",
+                  offset, length, GetLastError() ) ;
+         rc = EDB_SYS ;
+         goto error ;
+      }
+   }
+#else
    segment = mmap ( NULL, length, PROT_READ | PROT_WRITE,
                     MAP_SHARED, _fileOp.getHandle () , offset ) ;
    if ( MAP_FAILED == segment )
@@ -97,6 +129,7 @@ int _ossMmapFile::map ( unsigned long long offset,
          rc = EDB_SYS ;
       goto error ;
    }
+#endif
    seg._ptr = segment ;
    seg._length = length ;
    seg._offset = offset ;
