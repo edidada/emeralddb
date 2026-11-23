@@ -17,6 +17,7 @@
 #include "rtn.hpp"
 #include "pd.hpp"
 #include "pmd.hpp"
+#include "qry.hpp"
 
 using namespace bson ;
 
@@ -106,6 +107,14 @@ int rtn::rtnFind ( BSONObj &inRecord, BSONObj &outRecord )
 {
    int rc = EDB_OK ;
    dmsRecordID recordID ;
+   if ( !qry::hasIdLookup ( inRecord ) )
+   {
+      // no usable index: the optimizer picks a full table scan
+      int matches = 0 ;
+      rc = _dmsFile->scan ( inRecord, outRecord, matches ) ;
+      PD_RC_CHECK ( rc, PDERROR, "Failed to scan records, rc = %d", rc ) ;
+      goto done ;
+   }
    rc = _ixmBucketMgr->findIndex ( inRecord, recordID ) ;
    PD_RC_CHECK ( rc, PDERROR, "Failed to call ixm findIndex, rc = %d", rc ) ;
    rc = _dmsFile->find ( recordID, outRecord ) ;
@@ -114,6 +123,17 @@ done :
    return rc ;
 error :
    goto done ;
+}
+
+int rtn::explain ( const BSONObj &query, BSONObj &result )
+{
+   BSONObjBuilder builder ;
+   builder.append ( "plan", qry::planName ( query ) ) ;
+   builder.append ( "estimatedCost",
+                    qry::estimateCost ( query, _dmsFile->getRecordCount() ) ) ;
+   builder.append ( "recordCount", (int)_dmsFile->getRecordCount() ) ;
+   result = builder.obj() ;
+   return EDB_OK ;
 }
 
 int rtn::rtnRemove ( BSONObj &record )

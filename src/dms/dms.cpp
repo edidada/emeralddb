@@ -15,6 +15,7 @@
 *******************************************************************************/
 #include "dms.hpp"
 #include "pd.hpp"
+#include "qry.hpp"
 using namespace bson ;
 
 const char *gKeyFieldName = DMS_KEY_FIELDNAME ;
@@ -587,4 +588,82 @@ void dmsFile::_recoverSpace ( char *page )
       }
    }
    pageHeader->_freeOffset = pRight - page ;
+}
+
+int dmsFile::scan ( const BSONObj &query, BSONObj &result, int &matches )
+{
+   int rc = EDB_OK ;
+   matches = 0 ;
+   _mutex.get_shared () ;
+   for ( PAGEID pageID = 0 ; pageID < getNumPages() ; ++pageID )
+   {
+      char *page = pageToOffset ( pageID ) ;
+      if ( !page )
+      {
+         continue ;
+      }
+      dmsPageHeader *header = (dmsPageHeader*)page ;
+      SLOTID numSlots = (SLOTID)header->_numSlots ;
+      for ( SLOTID s = 0 ; s < numSlots ; ++s )
+      {
+         SLOTOFF slot = *(SLOTOFF*)( page + sizeof(dmsPageHeader) +
+                                     s*sizeof(SLOTID) ) ;
+         if ( DMS_SLOT_EMPTY == slot )
+         {
+            continue ;
+         }
+         dmsRecord *record = (dmsRecord*)( page + slot ) ;
+         if ( DMS_RECORD_FLAG_DROPPED == record->_flag )
+         {
+            continue ;
+         }
+         BSONObj obj = BSONObj ( page + slot + sizeof(dmsRecord) ).copy() ;
+         if ( qry::match ( obj, query ) )
+         {
+            ++matches ;
+            if ( 1 == matches )
+            {
+               result = obj ;
+            }
+         }
+      }
+   }
+   _mutex.release_shared () ;
+   if ( 0 == matches )
+   {
+      rc = EDB_IXM_ID_NOT_EXIST ;
+   }
+   return rc ;
+}
+
+unsigned int dmsFile::getRecordCount ()
+{
+   unsigned int count = 0 ;
+   _mutex.get_shared () ;
+   for ( PAGEID pageID = 0 ; pageID < getNumPages() ; ++pageID )
+   {
+      char *page = pageToOffset ( pageID ) ;
+      if ( !page )
+      {
+         continue ;
+      }
+      dmsPageHeader *header = (dmsPageHeader*)page ;
+      SLOTID numSlots = (SLOTID)header->_numSlots ;
+      for ( SLOTID s = 0 ; s < numSlots ; ++s )
+      {
+         SLOTOFF slot = *(SLOTOFF*)( page + sizeof(dmsPageHeader) +
+                                     s*sizeof(SLOTID) ) ;
+         if ( DMS_SLOT_EMPTY == slot )
+         {
+            continue ;
+         }
+         dmsRecord *record = (dmsRecord*)( page + slot ) ;
+         if ( DMS_RECORD_FLAG_DROPPED != record->_flag )
+         {
+            ++count ;
+         }
+      }
+   }
+   _mutex.release_shared () ;
+   return count ;
 }

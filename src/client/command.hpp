@@ -31,6 +31,7 @@
 #define CMD_TXN_BEGIN        "begin"
 #define CMD_TXN_COMMIT       "commit"
 #define CMD_TXN_ROLLBACK     "rollback"
+#define COMMAND_EXPLAIN      "explain"
 
 #define RECV_BUF_SIZE     4096
 #define SEND_BUF_SIZE     4096
@@ -151,6 +152,14 @@ class RollbackCommand : public SimpleOrderCommand
 {
    public :
       RollbackCommand () : SimpleOrderCommand(OP_TXN_ROLLBACK) {}
+} ;
+
+class ExplainCommand : public ICommand
+{
+   public :
+      int execute ( ossSocket & sock, std::vector<std::string> &argVec ) ;
+   protected :
+      int handleReply () ;
 } ;
 
 #endif

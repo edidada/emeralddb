@@ -30,6 +30,7 @@
 #define OP_TXN_BEGIN               9
 #define OP_TXN_COMMIT             10
 #define OP_TXN_ROLLBACK           11
+#define OP_EXPLAIN                12
 
 #define RETURN_CODE_STATE_OK       1
 
@@ -92,6 +93,9 @@ int msgExtractDelete  ( char *pBuffer, bson::BSONObj &key ) ;
 int msgBuildQuery ( char **ppBuffer, int *pBufferSize, bson::BSONObj &key ) ;
 
 int msgExtractQuery ( char *pBuffer, bson::BSONObj &key ) ;
+
+int msgBuildExplain ( char **ppBuffer, int *pBufferSize, bson::BSONObj &key ) ;
+int msgExtractExplain ( char *pBuffer, bson::BSONObj &key ) ;
 
 int msgBuildCommand ( char **ppBuffer, int *pBufferSize, bson::BSONObj &obj ) ;
 

@@ -297,6 +297,38 @@ error :
    goto done ;
 }
 
+int msgBuildExplain ( char **ppBuffer, int *pBufferSize, BSONObj &key )
+{
+   int rc             = EDB_OK ;
+   int size           = sizeof(MsgQuery) + key.objsize() ;
+   MsgQuery *pQuery   = NULL ;
+   rc = msgCheckBuffer ( ppBuffer, pBufferSize, size ) ;
+   if ( rc )
+   {
+      goto error ;
+   }
+   pQuery                    = (MsgQuery*)(*ppBuffer) ;
+   pQuery->header.messageLen = size ;
+   pQuery->header.opCode     = OP_EXPLAIN ;
+   memcpy ( &pQuery->key[0], key.objdata(), key.objsize() ) ;
+done :
+   return rc ;
+error :
+   goto done ;
+}
+
+int msgExtractExplain ( char *pBuffer, BSONObj &key )
+{
+   MsgQuery *pQuery = (MsgQuery*)pBuffer ;
+   if ( pQuery->header.messageLen < (int)sizeof(MsgQuery) ||
+        pQuery->header.opCode != OP_EXPLAIN )
+   {
+      return EDB_INVALIDARG ;
+   }
+   key = BSONObj ( &pQuery->key[0] ) ;
+   return EDB_OK ;
+}
+
 int msgExtractQuery ( char *pBuffer, BSONObj &key )
 {
    int rc              = EDB_OK ;

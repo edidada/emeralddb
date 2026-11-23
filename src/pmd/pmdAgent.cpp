@@ -134,6 +134,17 @@ static int pmdProcessAgentRequest ( char *pReceiveBuffer,
                   recordID.toString().c_str() ) ;
          rc = rtnMgr->rtnFind ( recordID, retObj ) ;
       }
+      else if ( OP_EXPLAIN == opCode )
+      {
+         rc = msgExtractExplain ( pReceiveBuffer, recordID ) ;
+         if ( rc )
+         {
+            probe = 42 ;
+            rc = EDB_INVALIDARG ;
+            goto error ;
+         }
+         rc = rtnMgr->explain ( recordID, retObj ) ;
+      }
       else if ( OP_DELETE == opCode )
       {
          PD_LOG ( PDDEBUG,
@@ -262,6 +273,7 @@ done :
       {
       case OP_SNAPSHOT :
       case OP_QUERY :
+      case OP_EXPLAIN :
          msgBuildReply ( ppResultBuffer,
                          pResultBufferSize,
                          rc, &retObj ) ;

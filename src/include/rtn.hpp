@@ -34,6 +34,7 @@ public :
    int rtnInsert ( bson::BSONObj &record ) ;
    int rtnFind ( bson::BSONObj &inRecord, bson::BSONObj &outRecord ) ;
    int rtnRemove ( bson::BSONObj &record ) ;
+   int explain ( const bson::BSONObj &query, bson::BSONObj &result ) ;
 } ;
 
 #endif

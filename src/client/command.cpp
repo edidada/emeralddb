@@ -30,6 +30,7 @@ COMMAND_ADD(COMMAND_SNAPSHOT, SnapshotCommand)
 COMMAND_ADD(CMD_TXN_BEGIN, BeginCommand)
 COMMAND_ADD(CMD_TXN_COMMIT, CommitCommand)
 COMMAND_ADD(CMD_TXN_ROLLBACK, RollbackCommand)
+COMMAND_ADD(COMMAND_EXPLAIN, ExplainCommand)
 COMMAND_END
 
 extern int gQuit;
@@ -377,6 +378,7 @@ int HelpCommand::execute( ossSocket & sock, std::vector<std::string> & argVec )
    printf("%s -- sending a delete command to emeralddb server\n", COMMAND_DELETE);
    printf("%s [number]-- sending a test command to emeralddb server\n", COMMAND_TEST);
    printf("%s -- providing current number of record inserting\n", COMMAND_SNAPSHOT);
+   printf("%s <json> -- showing the chosen query plan\n", COMMAND_EXPLAIN);
    printf("%s -- beginning a transaction\n", CMD_TXN_BEGIN);
    printf("%s -- committing the current transaction\n", CMD_TXN_COMMIT);
    printf("%s -- rolling back the current transaction\n", CMD_TXN_ROLLBACK);
@@ -450,4 +452,46 @@ int SimpleOrderCommand::handleReply ()
 {
    MsgReply *msg = (MsgReply*)_recvBuf ;
    return getError ( msg->returnCode ) ;
+}
+
+/******************************ExplainCommand***********************************/
+int ExplainCommand::handleReply ()
+{
+   MsgReply *msg = (MsgReply*)_recvBuf ;
+   int ret = getError ( msg->returnCode ) ;
+   if ( ret )
+   {
+      return ret ;
+   }
+   if ( msg->numReturn )
+   {
+      bson::BSONObj plan ( &(msg->data[0]) ) ;
+      std::cout << plan.toString() << std::endl ;
+   }
+   return ret ;
+}
+
+int ExplainCommand::execute ( ossSocket & sock,
+                             std::vector<std::string> &argVec )
+{
+   if ( argVec.size() < 1 )
+   {
+      return getError ( EDB_QUERY_INVALID_ARGUMENT ) ;
+   }
+   _jsonString = argVec[0] ;
+   if ( !sock.isConnected() )
+   {
+      return getError ( EDB_SOCK_NOT_CONNECT ) ;
+   }
+   int rc = sendOrder ( sock, msgBuildExplain ) ;
+   if ( rc )
+   {
+      return rc ;
+   }
+   rc = recvReply ( sock ) ;
+   if ( rc )
+   {
+      return rc ;
+   }
+   return handleReply() ;
 }

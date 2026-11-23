@@ -118,6 +118,9 @@ public :
    int insert ( bson::BSONObj &record, bson::BSONObj &outRecord, dmsRecordID &rid ) ;
    int remove ( dmsRecordID &rid ) ;
    int find ( dmsRecordID &rid, bson::BSONObj &result ) ;
+   // full table scan with a query predicate (used when no _id index applies)
+   int scan ( const bson::BSONObj &query, bson::BSONObj &result, int &matches ) ;
+   unsigned int getRecordCount () ;
 private :
    // create a new segment for the current file
    int _extendSegment () ;
