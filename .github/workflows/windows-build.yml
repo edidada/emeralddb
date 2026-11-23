@@ -49,7 +49,7 @@ jobs:
         shell: cmd
         run: |
           cd boost
-          bootstrap.bat msvc
+          call bootstrap.bat msvc
           b2 --with-thread --with-program_options --with-date_time --with-system link=static runtime-link=static threading=multi variant=debug toolset=msvc stage
 
       # Boost 1.49 auto-link expects the vc110 library names; newer toolsets
