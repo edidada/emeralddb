@@ -100,6 +100,7 @@ cmake --build build --config Debug
 ```
 edb> connect localhost 48127
 edb> insert {"_id":1,"name":"tom","age":20}
+edb> insert {"_id":2,"name":"zhangsan","age":21}
 edb> query {"_id":1}
 edb> snapshot
 edb> delete {"_id":1}
