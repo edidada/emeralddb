@@ -17,6 +17,7 @@
 #include "pd.hpp"
 #include "ossLatch.hpp"
 #include "ossPrimitiveFileOp.hpp"
+#include "ossUtil.hpp"
 
 const static char *PDLEVELSTRING[] =
 {
@@ -164,7 +165,7 @@ void pdLog ( PDLEVEL level, const char *func, const char *file,
               tv.tv_usec,
               PDLEVELSTRING[level],
               getpid(),
-              syscall(SYS_gettid),
+              ossGetCurrentThreadID(),
               func,
               line,
               file,
