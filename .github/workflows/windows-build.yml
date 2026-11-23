@@ -42,4 +42,6 @@ jobs:
 
       - name: Build solution
         shell: cmd
-        run: msbuild emeralddb.sln /p:Configuration=Debug /p:Platform=Win32 /p:PlatformToolset=v143 /m /verbosity:minimal
+        run: |
+          set CL=/DBOOST_ALL_NO_LIB
+          msbuild emeralddb.sln /p:Configuration=Debug /p:Platform=Win32 /p:PlatformToolset=v143 /m /verbosity:minimal
