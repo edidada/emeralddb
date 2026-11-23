@@ -730,7 +730,7 @@ void pmdEDUMgr::setEDU ( unsigned int tid, EDUID eduid )
 // get pmdEDUCB for the current thread
 pmdEDUCB *pmdEDUMgr::getEDU ()
 {
-   return getEDU ( ossGetCurrentThreadID() ) ;
+   return getEDU ( (unsigned int)(size_t)ossGetCurrentThreadID() ) ;
 }
 
 pmdEDUCB *pmdEDUMgr::getEDUByID ( EDUID eduID )

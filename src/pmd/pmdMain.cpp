@@ -149,7 +149,7 @@ static int pmdSetupSignalHandler ()
    sigemptyset ( &newact.sa_mask ) ;
 
    newact.sa_flags = 0 ;
-   newact.sa_handler = (__sighandler_t ) pmdSignalHandler ;
+   newact.sa_handler = pmdSignalHandler ;
    for ( int i = 0; i < PMD_MAX_SIGNALS; ++i )
    {
       sigaction ( i+1, &newact, NULL ) ;
