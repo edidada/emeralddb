@@ -29,6 +29,8 @@ namespace po = boost::program_options ;
 #define PMD_OPTION_MAXPOOL               "maxpool"
 #define PMD_OPTION_LOGPATH               "logpath"
 #define PMD_OPTION_CONFPATH              "confpath"
+#define PMD_OPTION_ROLE                  "role"
+#define PMD_OPTION_PEER                  "peer"
 
 #define PMD_ADD_PARAM_OPTIONS_BEGIN( desc )\
         desc.add_options()
@@ -44,12 +46,15 @@ namespace po = boost::program_options ;
         ( PMD_COMMANDS_STRING ( PMD_OPTION_MAXPOOL, ",m"), boost::program_options::value<unsigned int>(), "max pooled agent" ) \
         ( PMD_COMMANDS_STRING ( PMD_OPTION_LOGPATH, ",l"), boost::program_options::value<string>(), "diagnostic log file full path" ) \
         ( PMD_COMMANDS_STRING ( PMD_OPTION_CONFPATH, ",c"), boost::program_options::value<string>(), "configuration file full path" ) \
+        ( PMD_COMMANDS_STRING ( PMD_OPTION_ROLE, ",r"), boost::program_options::value<string>(), "replication role: primary or secondary" ) \
+        ( PMD_COMMANDS_STRING ( PMD_OPTION_PEER, ",p"), boost::program_options::value<string>(), "replication peer host:port" ) \
 
 #define CONFFILENAME "edb.conf"
 #define LOGFILENAME  "diag.log"
 #define DBFILENAME   "edb.data"
 #define SVCNAME      "48127"
 #define NUMPOOL      20
+#define DEFAULT_ROLE "primary"
 
 class pmdOptions
 {
@@ -87,11 +92,21 @@ public :
    {
       return _maxPool ;
    }
+   inline const char *getRole ()
+   {
+      return _role ;
+   }
+   inline const char *getPeer ()
+   {
+      return _peer ;
+   }
 private :
    char _dbPath [ OSS_MAX_PATHSIZE+1 ] ;
    char _logPath [ OSS_MAX_PATHSIZE+1 ] ;
    char _confPath [ OSS_MAX_PATHSIZE+1 ] ;
    char _svcName [ NI_MAXSERV+1 ] ;
+   char _role [ 16 ] ;
+   char _peer [ OSS_MAX_PATHSIZE+1 ] ;
    int  _maxPool ;
 } ;
 #endif

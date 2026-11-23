@@ -21,6 +21,7 @@
 #include "pmdEDUMgr.hpp"
 #include "rtn.hpp"
 #include "txn.hpp"
+#include "repl.hpp"
 
 enum EDB_DB_STATUS
 {
@@ -50,6 +51,7 @@ private :
    pmdEDUMgr     _eduMgr ;
    rtn           _rtnMgr ;
    txnManager    _txnMgr ;
+   replManager   _replMgr ;
 public :
    // constructor
    EDB_KRCB ()
@@ -76,6 +78,10 @@ public :
    txnManager *getTxnMgr()
    {
       return &_txnMgr ;
+   }
+   replManager *getReplMgr()
+   {
+      return &_replMgr ;
    }
    // get database status
    inline EDB_DB_STATUS getDBStatus ()

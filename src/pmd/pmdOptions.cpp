@@ -22,6 +22,9 @@ pmdOptions::pmdOptions ()
    memset ( _logPath, 0, sizeof(_logPath) ) ;
    memset ( _confPath, 0, sizeof(_confPath) ) ;
    memset ( _svcName, 0, sizeof(_svcName) ) ;
+   memset ( _role, 0, sizeof(_role) ) ;
+   memset ( _peer, 0, sizeof(_peer) ) ;
+   strcpy ( _role, DEFAULT_ROLE ) ;
    _maxPool = NUMPOOL ;
 }
 
@@ -120,6 +123,24 @@ int pmdOptions::importVM ( const po::variables_map &vm, bool isDefault )
    else if ( isDefault )
    {
       _maxPool = NUMPOOL ;
+   }
+
+   // replication role and peer
+   if ( vm.count ( PMD_OPTION_ROLE ) )
+   {
+      strncpy ( _role,
+                vm[PMD_OPTION_ROLE].as<string>().c_str(),
+                sizeof(_role) - 1 ) ;
+   }
+   else if ( isDefault )
+   {
+      strcpy ( _role, DEFAULT_ROLE ) ;
+   }
+   if ( vm.count ( PMD_OPTION_PEER ) )
+   {
+      strncpy ( _peer,
+                vm[PMD_OPTION_PEER].as<string>().c_str(),
+                sizeof(_peer) - 1 ) ;
    }
    return rc ;
 }

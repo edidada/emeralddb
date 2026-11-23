@@ -38,6 +38,20 @@ int EDB_KRCB::init ( pmdOptions *options )
    {
       return rc ;
    }
-   return _txnMgr.recover ( &_rtnMgr ) ;
+   rc = _txnMgr.recover ( &_rtnMgr ) ;
+   if ( rc )
+   {
+      return rc ;
+   }
+   int role = 0 == strcmp ( options->getRole(), "secondary" ) ?
+                 REPL_ROLE_SECONDARY : REPL_ROLE_PRIMARY ;
+   rc = _replMgr.initialize ( role, options->getPeer(),
+                              atoi ( getSvcName() ),
+                              getDataFilePath(), &_rtnMgr ) ;
+   if ( rc )
+   {
+      return rc ;
+   }
+   return _replMgr.start () ;
 }
 

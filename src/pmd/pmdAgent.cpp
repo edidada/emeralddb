@@ -105,6 +105,11 @@ static int pmdProcessAgentRequest ( char *pReceiveBuffer,
                }
             }
             rc = rtnMgr->rtnInsert ( insertor ) ;
+            if ( EDB_OK == rc )
+            {
+               pmdGetKRCB()->getReplMgr()->replicate ( REPL_OP_INSERT,
+                                                        insertor ) ;
+            }
          }
          catch ( std::exception &e )
          {
@@ -171,6 +176,11 @@ static int pmdProcessAgentRequest ( char *pReceiveBuffer,
             }
          }
          rc = rtnMgr->rtnRemove ( recordID ) ;
+         if ( EDB_OK == rc )
+         {
+            pmdGetKRCB()->getReplMgr()->replicate ( REPL_OP_DELETE,
+                                                     recordID ) ;
+         }
       }
       else if ( OP_SNAPSHOT == opCode )
       {

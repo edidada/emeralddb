@@ -120,6 +120,7 @@
     <ClCompile Include="..\src\rtn\rtn.cpp" />
     <ClCompile Include="..\src\txn\txn.cpp" />
     <ClCompile Include="..\src\qry\qry.cpp" />
+    <ClCompile Include="..\src\repl\repl.cpp" />
     <ClCompile Include="..\src\win\emeralddb_win.cpp" />
     <ClCompile Include="..\src\win\msvc_stl_compat.cpp" />
   </ItemGroup>
