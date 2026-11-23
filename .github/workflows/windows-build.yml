@@ -40,8 +40,6 @@ jobs:
           $text = $text.Replace("clock_type == TIME_UTC", "clock_type == TIME_UTC_")
           Set-Content -Path $xtime -Value $text -NoNewline
 
-      # The 2010-era vcxproj files hardcode an incomplete LibraryPath, so
-      # point MSBuild at the current SDK/MSVC library directories instead.
       - name: Build solution
         shell: cmd
-        run: msbuild emeralddb.sln /p:Configuration=Debug /p:Platform=Win32 /p:PlatformToolset=v143 /p:LibraryPath="$(WindowsSdkDir)lib\$(WindowsTargetPlatformVersion)\um\x86;$(WindowsSdkDir)lib\$(WindowsTargetPlatformVersion)\ucrt\x86;$(VCInstallDir)lib\x86;$(SolutionDir)boost\stage\lib" /m /verbosity:minimal
+        run: msbuild emeralddb.sln /p:Configuration=Debug /p:Platform=Win32 /p:PlatformToolset=v143 /m /verbosity:minimal
