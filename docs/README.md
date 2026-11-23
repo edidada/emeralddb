@@ -82,6 +82,8 @@ cmake --build build --config Debug
 | `--logpath` | `-l` | 诊断日志文件 | `./diag.log` |
 | `--maxpool` | `-m` | 最大 agent 线程数 | `20` |
 | `--confpath` | `-c` | 配置文件路径 | `./edb.conf` |
+| `--role` | `-r` | 复制角色 `primary` / `secondary` | `primary` |
+| `--peer` | `-p` | 主节点推送目标 `host:port`（备节点监听端口为服务端口+1） | 空 |
 | `--help` | `-h` | 帮助 | — |
 
 服务端启动后会加载数据文件、从已有记录重建 `_id` 哈希索引，并监听 TCP 端口。
@@ -117,6 +119,7 @@ edb> quit
 - `query` 按 `_id` 精确查找，命中时打印 BSON 字符串。
 - `snapshot` 打印 `insertTimes`、`delTimes`、`queryTimes` 和 `serverRunTime`（分钟），
   可用来确认请求确实到达了服务端。
+- `begin` / `commit` / `rollback` 控制事务；`explain <json>` 查看查询计划。
 - `help` 列出所有命令，`quit` 断开连接并退出。
 - 服务端日志写入 `diag.log`（默认级别 `PDWARNING`），可用于排查问题。
 
@@ -203,5 +206,29 @@ gh run view <run-id> --repo edidada/emeralddb --log
   `src/win/emeralddb_win.cpp` 适配。
 - Linux/macOS：原生 `unistd` / `mmap` / `pthread`，由 CMake 或 autotools 构建。
 
-> 说明：这是一个教学/实验性质的单机数据库，实现了「索引 + 页式存储 + 网络 CRUD」
-> 的主流程，不包含事务、多机复制、查询优化器、持久化索引等完整数据库能力。
+### 2.10 持久化索引（`src/include/ixmPersist.hpp`、`src/ixm/ixmBucket.cpp`）
+
+- `_id` 哈希索引写入 `<dbpath>.idx` 追加日志，记录 bucket、hash、记录位置和原始
+  BSON 元素；启动时直接加载，无需全表扫描重建索引。索引文件缺失时自动回退到扫描重建。
+
+### 2.11 事务（`src/include/txn.hpp`、`src/txn/txn.cpp`）
+
+- 客户端 `begin` / `commit` / `rollback`，每个连接一个事务。
+- 写操作先记入 `<dbpath>.wal` 再应用到存储；提交时刷盘，回滚时按逆序撤销。
+- 启动时重做已提交事务、撤销未提交事务。
+
+### 2.12 查询优化器（`src/include/qry.hpp`、`src/qry/qry.cpp`）
+
+- 有 `_id` 等值条件时选 `ID_INDEX_LOOKUP`（代价 1），否则选 `TABLE_SCAN`（代价为记录数）。
+- 支持任意字段的等值、 `$eq` / `$ne` / `$gt` / `$gte` / `$lt` / `$lte` 谓词。
+- `explain <json>` 返回所选计划、代价估算和记录数。
+
+### 2.13 多机复制（`src/include/repl.hpp`、`src/repl/repl.cpp`）
+
+- 主节点通过 `--role primary --peer host:port` 配置，写操作先写入 `<dbpath>.binlog`
+  再异步推送到备节点的服务端口 +1。
+- 备节点通过 `--role secondary` 监听该端口，收到记录后经记录层回放。
+- 属于教学实现：无选举、无冲突检测，主节点写入后立即复制（不等事务提交）。
+
+> 说明：这是教学/实验性质的数据库，上述功能在主流程上可用，但不具备生产级数据库的
+> 完整性（如两阶段提交、MVCC、副本集选举、复杂查询优化等）。
