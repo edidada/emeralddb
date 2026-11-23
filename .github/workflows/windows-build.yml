@@ -33,4 +33,4 @@ jobs:
 
       - name: Build solution
         shell: cmd
-        run: msbuild emeralddb.sln /p:Configuration=Debug /p:Platform=Win32 /m /verbosity:minimal
+        run: msbuild emeralddb.sln /p:Configuration=Debug /p:Platform=Win32 /p:PlatformToolset=v143 /p:WindowsTargetPlatformVersion=10.0 /m /verbosity:minimal
