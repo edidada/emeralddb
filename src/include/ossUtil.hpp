@@ -103,8 +103,11 @@ inline OSSTID ossGetCurrentThreadID ()
 {
 #if defined _WINDOWS
    return GetCurrentThreadId () ;
-#else
+#elif defined __linux__
    return syscall(SYS_gettid) ;
+#else
+   // macOS has no gettid(); pthread_self() is a stable per-thread identity
+   return (OSSTID)pthread_self () ;
 #endif
 }
 

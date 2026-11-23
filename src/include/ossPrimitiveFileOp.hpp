@@ -59,6 +59,34 @@
 
 #define OSS_HANDLE			int
 #define OSS_INVALID_HANDLE_FD_VALUE (OSS_HANDLE(-1))
+#elif defined(__APPLE__)
+
+#define OSS_HANDLE         int
+#define OSS_F_GETLK        F_GETLK
+#define OSS_F_SETLK        F_SETLK
+#define OSS_F_SETLKW       F_SETLKW
+#define oss_struct_statfs  struct statfs
+#define oss_statfs         statfs
+#define oss_fstatfs        fstatfs
+#define oss_struct_statvfs struct statvfs
+#define oss_statvfs        statvfs
+#define oss_fstatvfs       fstatvfs
+#define oss_struct_stat    struct stat
+#define oss_struct_flock   struct flock
+#define oss_stat           stat
+#define oss_lstat          lstat
+#define oss_fstat          fstat
+#define oss_open           open
+#define oss_lseek          lseek
+#define oss_ftruncate      ftruncate
+#define oss_off_t          off_t
+#define oss_close          close
+#define oss_access         access
+#define oss_chmod          chmod
+#define oss_read           read
+#define oss_write          write
+#define OSS_INVALID_HANDLE_FD_VALUE (-1)
+
 #else
 
 #define OSS_HANDLE		   int

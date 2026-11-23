@@ -23,9 +23,11 @@
 #else
 
 #include <unistd.h>
-#include <linux/limits.h>
+#include <limits.h>
 #include <sys/time.h>
+#if defined(__linux__)
 #include <syscall.h>
+#endif
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <signal.h>
