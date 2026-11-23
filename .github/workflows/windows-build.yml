@@ -2,8 +2,9 @@ name: Windows Build
 
 on:
   push:
+    branches: [ "edidada/msbuild" ]
   pull_request:
-  workflow_dispatch:
+    branches: [ "edidada/msbuild" ]
 
 jobs:
   build:
