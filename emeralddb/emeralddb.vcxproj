@@ -106,8 +106,13 @@
     <ClCompile Include="..\src\pmd\pmdOptions.cpp" />
     <ClCompile Include="..\src\pmd\pmdTcpListener.cpp" />
     <ClCompile Include="..\src\pd\pd.cpp" />
+    <ClCompile Include="..\src\dms\dms.cpp" />
+    <ClCompile Include="..\src\ixm\ixmBucket.cpp" />
+    <ClCompile Include="..\src\oss\ossHash.cpp" />
+    <ClCompile Include="..\src\oss\ossMmapFile.cpp" />
     <ClCompile Include="..\src\oss\ossPrimitiveFileOp.cpp" />
     <ClCompile Include="..\src\oss\ossSocket.cpp" />
+    <ClCompile Include="..\src\rtn\rtn.cpp" />
     <ClCompile Include="..\src\win\emeralddb_win.cpp" />
   </ItemGroup>
   <ItemGroup>

@@ -22,8 +22,13 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
+      - name: Setup MSVC x86 environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x86
+
       # The code uses boost::xtime / Spirit Classic, which were removed in
-      # newer Boost releases, so a Boost 1.49.0 header tree is required.
+      # newer Boost releases, so a Boost 1.49.0 source tree is required.
       - name: Download Boost 1.49.0
         shell: pwsh
         run: |
@@ -40,8 +45,27 @@ jobs:
           $text = $text.Replace("clock_type == TIME_UTC", "clock_type == TIME_UTC_")
           Set-Content -Path $xtime -Value $text -NoNewline
 
+      - name: Build Boost libraries
+        shell: cmd
+        run: |
+          cd boost
+          bootstrap.bat msvc
+          b2 --with-thread --with-program_options --with-date_time --with-system link=static runtime-link=static threading=multi variant=debug toolset=msvc stage
+
+      # Boost 1.49 auto-link expects the vc110 library names; newer toolsets
+      # produce a different toolset tag, so mirror the libs under that name.
+      - name: Normalize Boost library names
+        shell: pwsh
+        run: |
+          Get-ChildItem boost\stage\lib\*.lib | ForEach-Object {
+            $name = $_.BaseName -replace 'vc\d+', 'vc110'
+            if (-not $name.StartsWith('lib')) { $name = 'lib' + $name }
+            $target = Join-Path $_.DirectoryName ($name + '.lib')
+            if ($target -ne $_.FullName) { Copy-Item $_.FullName $target -Force }
+          }
+
       - name: Build solution
         shell: cmd
         run: |
-          set CL=/DBOOST_ALL_NO_LIB
+          set LINK=/LIBPATH:%GITHUB_WORKSPACE%\boost\stage\lib
           msbuild emeralddb.sln /p:Configuration=Debug /p:Platform=Win32 /p:PlatformToolset=v143 /m /verbosity:minimal
