@@ -69,8 +69,8 @@ int pmdTcpListenerEntryPoint ( pmdEDUCB *cb, void *arg )
       // master loop for tcp listener
       while ( !EDB_IS_DB_DOWN )
       {
-         int s ;
-         rc = sock.accept ( (SOCKET*)&s, NULL, NULL ) ;
+         SOCKET s = 0 ;
+         rc = sock.accept ( &s, NULL, NULL ) ;
          // if we don't get anything for a period of time, let's loop
          if ( EDB_TIMEOUT == rc )
          {
@@ -92,8 +92,7 @@ int pmdTcpListenerEntryPoint ( pmdEDUCB *cb, void *arg )
          }
 
          // assign the socket to the arg
-         void *pData = NULL ;
-         *((int *) &pData) = s ;
+         void *pData = reinterpret_cast<void *>( static_cast<size_t>( s ) ) ;
 
          rc = eduMgr->startEDU ( EDU_TYPE_AGENT, pData, &agentEDU ) ;
          if ( rc )
@@ -108,7 +107,7 @@ int pmdTcpListenerEntryPoint ( pmdEDUCB *cb, void *arg )
                PD_LOG ( PDERROR, "Failed to start EDU agent" ) ;
             }
             // close remote connection if we can't create new thread
-            ossSocket newsock ( (SOCKET*)&s ) ;
+            ossSocket newsock ( &s ) ;
             newsock.close () ;
             continue ;
          }
