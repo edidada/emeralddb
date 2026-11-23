@@ -69,8 +69,10 @@ cmake --build build --config Debug
 ### 1.4 启动服务端
 
 ```bash
-./build/emeralddb --dbpath ./edb.data --svcname 48127 \
-                  --logpath ./diag.log --maxpool 20
+./build/emeralddb --dbpath ./edb.data --svcname 48127 --logpath ./diag.log --maxpool 20
+```
+```ps
+.\cmake-build-debug\emeralddb.exe --dbpath ./edb.data --svcname 48127 --logpath ./diag.log --maxpool 20
 ```
 
 | 参数 | 短选项 | 说明 | 默认值 |
@@ -88,6 +90,9 @@ cmake --build build --config Debug
 
 ```bash
 ./build/client
+```
+```ps
+.\cmake-build-debug\client.exe
 ```
 
 进入 `edb>` 提示符后：
