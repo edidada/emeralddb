@@ -1,11 +1,9 @@
-// Workaround for recent MSVC toolsets where the vectorized first/last
-// "not of" helpers are referenced by the STL headers but not provided by
-// the shipped CRT libraries. Only needed for 32-bit Windows builds.
+// Some MSVC toolsets reference these vectorized STL helpers from their
+// headers but do not ship them in the CRT libraries. Provide weak fallbacks:
+// they are used only when the CRT does not already define the symbol.
 #ifdef _WIN32
 
-extern "C" {
-
-unsigned int __stdcall __std_find_first_not_of_trivial_pos_1(
+extern "C" unsigned int __stdcall edb_find_first_not_of_pos(
    const char *first, unsigned int count,
    const char *match, unsigned int matchCount)
 {
@@ -28,7 +26,7 @@ unsigned int __stdcall __std_find_first_not_of_trivial_pos_1(
    return count ;
 }
 
-unsigned int __stdcall __std_find_last_not_of_trivial_pos_1(
+extern "C" unsigned int __stdcall edb_find_last_not_of_pos(
    const char *first, unsigned int count,
    const char *match, unsigned int matchCount)
 {
@@ -51,6 +49,7 @@ unsigned int __stdcall __std_find_last_not_of_trivial_pos_1(
    return count ;
 }
 
-} // extern "C"
+#pragma comment(linker, "/alternatename:___std_find_first_not_of_trivial_pos_1@16=_edb_find_first_not_of_pos@16")
+#pragma comment(linker, "/alternatename:___std_find_last_not_of_trivial_pos_1@16=_edb_find_last_not_of_pos@16")
 
 #endif // _WIN32
