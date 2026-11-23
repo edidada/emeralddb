@@ -97,6 +97,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\src\bson\src\bsonobj.cpp" />
+    <ClCompile Include="..\src\bson\src\oid.cpp" />
+    <ClCompile Include="..\src\bson\src\util\json.cpp" />
+    <ClCompile Include="..\src\bson\src\lib\base64.cpp" />
+    <ClCompile Include="..\src\bson\src\lib\md5.cpp" />
+    <ClCompile Include="..\src\bson\src\lib\nonce.cpp" />
     <ClCompile Include="..\src\msg\msg.cpp" />
     <ClCompile Include="..\src\pmd\pmd.cpp" />
     <ClCompile Include="..\src\pmd\pmdAgent.cpp" />
