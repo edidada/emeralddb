@@ -16,6 +16,7 @@
 #include "ossSocket.hpp"
 #include "mvs.hpp"
 #include <boost/thread/mutex.hpp>
+#include <boost/thread/thread.hpp>
 #include <ctime>
 
 #define REPL_ROLE_PRIMARY   0
