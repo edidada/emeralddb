@@ -7,6 +7,7 @@
 #include "rtn.hpp"
 #include <vector>
 #include <boost/thread/thread.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
 
 static int recvExact ( ossSocket &sock, char *buffer, int length )
 {
@@ -79,6 +80,30 @@ void secondaryLoop ( replManager *manager, int listenPort, rtn *rtnMgr )
             }
          }
          int op = REPL_ACK ;
+         int replyTerm = manager->getTerm () ;
+         if ( REPL_OP_HEARTBEAT == header.op )
+         {
+            manager->onHeartbeat ( header.count ) ;
+            replHeader reply ;
+            reply.length = sizeof(reply) ;
+            reply.op     = REPL_ACK ;
+            reply.txnID  = 0 ;
+            reply.count  = manager->getTerm () ;
+            peer.send ( (const char*)&reply, sizeof(reply) ) ;
+            continue ;
+         }
+         if ( REPL_OP_REQUEST_VOTE == header.op )
+         {
+            bool granted = manager->onVoteRequest ( header.count,
+                                                    header.txnID ) ;
+            replHeader reply ;
+            reply.length = sizeof(reply) ;
+            reply.op     = granted ? REPL_VOTE_GRANTED : REPL_VOTE_NO ;
+            reply.txnID  = header.txnID ;
+            reply.count  = manager->getTerm () ;
+            peer.send ( (const char*)&reply, sizeof(reply) ) ;
+            continue ;
+         }
          if ( REPL_OP_PREPARE == header.op )
          {
             std::vector<mvsWriteOp> ops ;
@@ -103,8 +128,15 @@ void secondaryLoop ( replManager *manager, int listenPort, rtn *rtnMgr )
                ops.push_back ( write ) ;
                offset += len ;
             }
-            manager->stagePrepared ( header.txnID, ops ) ;
-            op = REPL_VOTE_YES ;
+            if ( manager->isPrimary() )
+            {
+               manager->stagePrepared ( header.txnID, ops ) ;
+               op = REPL_VOTE_YES ;
+            }
+            else
+            {
+               op = REPL_VOTE_NO ;
+            }
          }
          else if ( REPL_OP_COMMIT == header.op )
          {
@@ -118,14 +150,18 @@ void secondaryLoop ( replManager *manager, int listenPort, rtn *rtnMgr )
          }
          else
          {
-            bson::BSONObj record ( &payload[0] ) ;
-            if ( REPL_OP_INSERT == header.op )
+            if ( payloadLen > 0 &&
+                 ( REPL_OP_INSERT == header.op || REPL_OP_DELETE == header.op ) )
             {
-               rtnMgr->rtnInsert ( record ) ;
-            }
-            else if ( REPL_OP_DELETE == header.op )
-            {
-               rtnMgr->rtnRemove ( record ) ;
+               bson::BSONObj record ( &payload[0] ) ;
+               if ( REPL_OP_INSERT == header.op )
+               {
+                  rtnMgr->rtnInsert ( record ) ;
+               }
+               else
+               {
+                  rtnMgr->rtnRemove ( record ) ;
+               }
             }
             continue ;
          }
@@ -133,7 +169,7 @@ void secondaryLoop ( replManager *manager, int listenPort, rtn *rtnMgr )
          reply.length = sizeof(reply) ;
          reply.op     = op ;
          reply.txnID  = header.txnID ;
-         reply.count  = 0 ;
+         reply.count  = replyTerm ;
          peer.send ( (const char*)&reply, sizeof(reply) ) ;
       }
    }
@@ -159,12 +195,43 @@ replManager::~replManager ()
    }
 }
 
-int replManager::initialize ( int role, const char *peer, int servicePort,
-                              const char *dbPath, rtn *rtnMgr )
+int replManager::initialize ( int role, const char *peer, const char *peers,
+                              int servicePort, const char *dbPath,
+                              rtn *rtnMgr )
 {
    _role = role ;
    _rtn = rtnMgr ;
+   _nodeID = servicePort ;
    _listenPort = servicePort + 1 ;
+   _lastHeartbeat = time ( NULL ) ;
+   _term = isPrimary() ? 1 : 0 ;
+   _votedTerm = 0 ;
+   _votedFor = 0 ;
+   if ( peers && *peers )
+   {
+      std::string text ( peers ) ;
+      size_t start = 0 ;
+      while ( start < text.size() )
+      {
+         size_t end = text.find ( ',', start ) ;
+         std::string item = text.substr ( start, end - start ) ;
+         size_t colon = item.find ( ':' ) ;
+         if ( colon != std::string::npos )
+         {
+            int port = atoi ( item.substr ( colon + 1 ).c_str() ) ;
+            if ( port > 0 )
+            {
+               _peers.push_back ( std::make_pair (
+                     item.substr ( 0, colon ), port + 1 ) ) ;
+            }
+         }
+         if ( end == std::string::npos )
+         {
+            break ;
+         }
+         start = end + 1 ;
+      }
+   }
    if ( peer && *peer )
    {
       std::string text ( peer ) ;
@@ -174,6 +241,11 @@ int replManager::initialize ( int role, const char *peer, int servicePort,
          _peerHost = text.substr ( 0, colon ) ;
          _peerPort = atoi ( text.substr ( colon + 1 ).c_str() ) ;
       }
+   }
+   if ( _peerHost.empty() && !_peers.empty() )
+   {
+      _peerHost = _peers[0].first ;
+      _peerPort = _peers[0].second ;
    }
    if ( dbPath )
    {
@@ -198,18 +270,161 @@ int replManager::initialize ( int role, const char *peer, int servicePort,
 
 int replManager::start ()
 {
-   if ( isPrimary() || _started )
+   if ( _started )
    {
       return EDB_OK ;
    }
    _started = true ;
-   boost::thread thread ( secondaryLoop, this, _listenPort, _rtn ) ;
-   thread.detach () ;
+   boost::thread listener ( secondaryLoop, this, _listenPort, _rtn ) ;
+   listener.detach () ;
+   if ( !_peers.empty() )
+   {
+      _electionThread = boost::thread ( &replManager::electionLoop, this ) ;
+   }
    return EDB_OK ;
 }
 
 void replManager::stop ()
 {
+}
+
+void replManager::onHeartbeat ( int term )
+{
+   boost::mutex::scoped_lock lock ( _electionMutex ) ;
+   if ( term > _term )
+   {
+      _term = term ;
+      _role = REPL_ROLE_SECONDARY ;
+   }
+   else if ( term == _term && !isPrimary() )
+   {
+      _role = REPL_ROLE_SECONDARY ;
+   }
+   _lastHeartbeat = time ( NULL ) ;
+}
+
+bool replManager::onVoteRequest ( int term, int candidateID )
+{
+   boost::mutex::scoped_lock lock ( _electionMutex ) ;
+   if ( term > _term )
+   {
+      _term = term ;
+      _votedTerm = 0 ;
+      _votedFor = 0 ;
+      _role = REPL_ROLE_SECONDARY ;
+   }
+   if ( term < _term || _votedTerm >= term )
+   {
+      return false ;
+   }
+   if ( _votedFor != 0 && _votedFor != candidateID )
+   {
+      return false ;
+   }
+   _votedTerm = term ;
+   _votedFor = candidateID ;
+   return true ;
+}
+
+void replManager::sendHeartbeat ( const std::string &host, int port )
+{
+   ossSocket sock ( host.c_str(), (unsigned int)port ) ;
+   if ( sock.initSocket() || sock.connect() )
+   {
+      return ;
+   }
+   replHeader header ;
+   header.length = sizeof(header) ;
+   header.op     = REPL_OP_HEARTBEAT ;
+   header.txnID  = 0 ;
+   header.count  = _term ;
+   if ( sock.send ( (const char*)&header, sizeof(header) ) )
+   {
+      return ;
+   }
+   replHeader reply ;
+   recvExact ( sock, (char*)&reply, sizeof(reply) ) ;
+}
+
+bool replManager::requestVote ( const std::string &host, int port,
+                                int term, int candidateID )
+{
+   ossSocket sock ( host.c_str(), (unsigned int)port ) ;
+   if ( sock.initSocket() || sock.connect() )
+   {
+      return false ;
+   }
+   replHeader header ;
+   header.length = sizeof(header) ;
+   header.op     = REPL_OP_REQUEST_VOTE ;
+   header.txnID  = candidateID ;
+   header.count  = term ;
+   if ( sock.send ( (const char*)&header, sizeof(header) ) )
+   {
+      return false ;
+   }
+   replHeader reply ;
+   if ( recvExact ( sock, (char*)&reply, sizeof(reply) ) )
+   {
+      return false ;
+   }
+   return REPL_VOTE_GRANTED == reply.op ;
+}
+
+void replManager::electionLoop ()
+{
+   while ( EDB_IS_DB_UP )
+   {
+      if ( isPrimary() )
+      {
+         for ( size_t i = 0 ; i < _peers.size() ; ++i )
+         {
+            sendHeartbeat ( _peers[i].first, _peers[i].second ) ;
+         }
+         boost::this_thread::sleep ( boost::posix_time::milliseconds(1000) ) ;
+         continue ;
+      }
+      int timeout = 3 + ( _nodeID % 3 ) ;
+      if ( difftime ( time ( NULL ), _lastHeartbeat ) > (double)timeout )
+      {
+         int term = 0 ;
+         {
+            boost::mutex::scoped_lock lock ( _electionMutex ) ;
+            if ( isPrimary() )
+            {
+               continue ;
+            }
+            _role = REPL_ROLE_CANDIDATE ;
+            ++_term ;
+            _votedTerm = _term ;
+            _votedFor  = _nodeID ;
+            term = _term ;
+         }
+         int votes = 1 ;
+         std::vector<std::pair<std::string, int> > peers = _peers ;
+         for ( size_t i = 0 ; i < peers.size() ; ++i )
+         {
+            if ( requestVote ( peers[i].first, peers[i].second,
+                               term, _nodeID ) )
+            {
+               ++votes ;
+            }
+         }
+         boost::mutex::scoped_lock lock ( _electionMutex ) ;
+         if ( votes > (int)( _peers.size() + 1 ) / 2 )
+         {
+            _role = REPL_ROLE_PRIMARY ;
+            _lastHeartbeat = time ( NULL ) ;
+            PD_LOG ( PDEVENT, "Node %d won election for term %d",
+                     _nodeID, term ) ;
+         }
+         else
+         {
+            _role = REPL_ROLE_SECONDARY ;
+         }
+      }
+      boost::this_thread::sleep ( boost::posix_time::milliseconds(500) ) ;
+   }
 }
 
 void replManager::log2PC ( const char *action, int txnID )
@@ -233,6 +448,7 @@ void replManager::applyPrepared ( int txnID )
    std::vector<mvsWriteOp> ops = _prepared[txnID] ;
    log2PC ( "COMMIT", txnID ) ;
    _prepared.erase ( txnID ) ;
+   _remoteApply = true ;
    for ( size_t i = 0 ; i < ops.size() ; ++i )
    {
       bson::BSONObj record ( ops[i].data.c_str() ) ;
@@ -245,6 +461,7 @@ void replManager::applyPrepared ( int txnID )
          _rtn->rtnRemove ( record ) ;
       }
    }
+   _remoteApply = false ;
 }
 
 void replManager::discardPrepared ( int txnID )

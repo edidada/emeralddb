@@ -62,7 +62,7 @@ int EDB_KRCB::init ( pmdOptions *options )
    int role = 0 == strcmp ( options->getRole(), "secondary" ) ?
                  REPL_ROLE_SECONDARY : REPL_ROLE_PRIMARY ;
    rc = _replMgr.initialize ( role, options->getPeer(),
-                              atoi ( getSvcName() ),
+                              options->getPeers(), atoi ( getSvcName() ),
                               getDataFilePath(), &_rtnMgr ) ;
    if ( rc )
    {

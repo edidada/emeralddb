@@ -24,6 +24,7 @@ pmdOptions::pmdOptions ()
    memset ( _svcName, 0, sizeof(_svcName) ) ;
    memset ( _role, 0, sizeof(_role) ) ;
    memset ( _peer, 0, sizeof(_peer) ) ;
+   memset ( _peers, 0, sizeof(_peers) ) ;
    strcpy ( _role, DEFAULT_ROLE ) ;
    _maxPool = NUMPOOL ;
 }
@@ -141,6 +142,12 @@ int pmdOptions::importVM ( const po::variables_map &vm, bool isDefault )
       strncpy ( _peer,
                 vm[PMD_OPTION_PEER].as<string>().c_str(),
                 sizeof(_peer) - 1 ) ;
+   }
+   if ( vm.count ( PMD_OPTION_PEERS ) )
+   {
+      strncpy ( _peers,
+                vm[PMD_OPTION_PEERS].as<string>().c_str(),
+                sizeof(_peers) - 1 ) ;
    }
    return rc ;
 }

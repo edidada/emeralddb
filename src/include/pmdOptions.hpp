@@ -31,6 +31,7 @@ namespace po = boost::program_options ;
 #define PMD_OPTION_CONFPATH              "confpath"
 #define PMD_OPTION_ROLE                  "role"
 #define PMD_OPTION_PEER                  "peer"
+#define PMD_OPTION_PEERS                 "peers"
 
 #define PMD_ADD_PARAM_OPTIONS_BEGIN( desc )\
         desc.add_options()
@@ -48,6 +49,7 @@ namespace po = boost::program_options ;
         ( PMD_COMMANDS_STRING ( PMD_OPTION_CONFPATH, ",c"), boost::program_options::value<string>(), "configuration file full path" ) \
         ( PMD_COMMANDS_STRING ( PMD_OPTION_ROLE, ",r"), boost::program_options::value<string>(), "replication role: primary or secondary" ) \
         ( PMD_COMMANDS_STRING ( PMD_OPTION_PEER, ",p"), boost::program_options::value<string>(), "replication peer host:port" ) \
+        ( PMD_COMMANDS_STRING ( PMD_OPTION_PEERS, ""), boost::program_options::value<string>(), "replica set peers: host:port,host:port" ) \
 
 #define CONFFILENAME "edb.conf"
 #define LOGFILENAME  "diag.log"
@@ -100,6 +102,10 @@ public :
    {
       return _peer ;
    }
+   inline const char *getPeers ()
+   {
+      return _peers ;
+   }
 private :
    char _dbPath [ OSS_MAX_PATHSIZE+1 ] ;
    char _logPath [ OSS_MAX_PATHSIZE+1 ] ;
@@ -107,6 +113,7 @@ private :
    char _svcName [ NI_MAXSERV+1 ] ;
    char _role [ 16 ] ;
    char _peer [ OSS_MAX_PATHSIZE+1 ] ;
+   char _peers [ OSS_MAX_PATHSIZE+1 ] ;
    int  _maxPool ;
 } ;
 #endif

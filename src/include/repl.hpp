@@ -16,6 +16,7 @@
 #include "ossSocket.hpp"
 #include "mvs.hpp"
 #include <boost/thread/mutex.hpp>
+#include <ctime>
 
 #define REPL_ROLE_PRIMARY   0
 #define REPL_ROLE_SECONDARY 1
@@ -28,6 +29,10 @@
 #define REPL_VOTE_YES   6
 #define REPL_VOTE_NO    7
 #define REPL_ACK        8
+#define REPL_OP_HEARTBEAT       9
+#define REPL_OP_REQUEST_VOTE   10
+#define REPL_VOTE_GRANTED      11
+#define REPL_ROLE_CANDIDATE     2
 
 struct replHeader
 {
@@ -54,6 +59,20 @@ private :
    std::string _twoPcPath ;
    FILE *_twoPcLog ;
    boost::mutex _peerMutex ;
+   int _nodeID ;
+   int _term ;
+   int _votedTerm ;
+   int _votedFor ;
+   time_t _lastHeartbeat ;
+   std::vector<std::pair<std::string, int> > _peers ;
+   boost::thread _electionThread ;
+   bool _remoteApply ;
+   boost::mutex _electionMutex ;
+
+   void electionLoop () ;
+   void sendHeartbeat ( const std::string &host, int port ) ;
+   bool requestVote ( const std::string &host, int port,
+                      int term, int candidateID ) ;
 
 public :
    void log2PC ( const char *action, int txnID ) ;
@@ -74,10 +93,16 @@ public :
       _rtn = NULL ;
       _started = false ;
       _twoPcLog = NULL ;
+      _nodeID = 0 ;
+      _term = 0 ;
+      _votedTerm = 0 ;
+      _votedFor = 0 ;
+      _lastHeartbeat = 0 ;
+      _remoteApply = false ;
    }
    ~replManager () ;
-   int initialize ( int role, const char *peer, int servicePort,
-                    const char *dbPath, rtn *rtnMgr ) ;
+   int initialize ( int role, const char *peer, const char *peers,
+                    int servicePort, const char *dbPath, rtn *rtnMgr ) ;
    int start () ;
    void stop () ;
    int prepare ( int txnID, const std::vector<mvsWriteOp> &writes ) ;
@@ -87,6 +112,24 @@ public :
    {
       return REPL_ROLE_PRIMARY == _role ;
    }
+   bool isWritable () const
+   {
+      return isPrimary() || _peers.empty() ;
+   }
+   bool isRemoteApply () const
+   {
+      return _remoteApply ;
+   }
+   void setRemoteApply ( bool value )
+   {
+      _remoteApply = value ;
+   }
+   int getTerm () const
+   {
+      return _term ;
+   }
+   void onHeartbeat ( int term ) ;
+   bool onVoteRequest ( int term, int candidateID ) ;
 } ;
 
 #endif

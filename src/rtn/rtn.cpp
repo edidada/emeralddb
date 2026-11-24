@@ -142,6 +142,11 @@ int rtn::rtnInsert ( BSONObj &record )
    {
       return insertRaw ( record ) ;
    }
+   replManager *repl = krcb->getReplMgr () ;
+   if ( !repl->isWritable() && !repl->isRemoteApply() )
+   {
+      return EDB_QUIESCED ;
+   }
    if ( cb && cb->isInTxn() )
    {
       return txn->stageWrite ( cb->getTxnID(), TXN_OP_INSERT, record ) ;
@@ -158,6 +163,11 @@ int rtn::rtnRemove ( BSONObj &record )
    if ( txn->isApplying() )
    {
       return removeRaw ( record ) ;
+   }
+   replManager *repl = krcb->getReplMgr () ;
+   if ( !repl->isWritable() && !repl->isRemoteApply() )
+   {
+      return EDB_QUIESCED ;
    }
    if ( cb && cb->isInTxn() )
    {
