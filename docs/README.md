@@ -214,8 +214,10 @@ gh run view <run-id> --repo edidada/emeralddb --log
 ### 2.11 事务（`src/include/txn.hpp`、`src/txn/txn.cpp`）
 
 - 客户端 `begin` / `commit` / `rollback`，每个连接一个事务。
-- 写操作先记入 `<dbpath>.wal` 再应用到存储；提交时刷盘，回滚时按逆序撤销。
-- 启动时重做已提交事务、撤销未提交事务。
+- MVCC 快照隔离：事务开始时取快照时间戳，读按 `[beginTS, endTS)` 返回可见版本，
+  版本持久化到 `<dbpath>.mvs`。
+- 写写冲突检测：提交时若发现更高版本已提交，返回 `EDB_CONFLICT` 并中止事务。
+- WAL 记录 `BEGIN` / 写操作 / `COMMIT`，提交先写版本再刷 WAL，重启后重放已提交事务。
 
 ### 2.12 查询优化器（`src/include/qry.hpp`、`src/qry/qry.cpp`）
 
@@ -225,11 +227,12 @@ gh run view <run-id> --repo edidada/emeralddb --log
 
 ### 2.13 多机复制（`src/include/repl.hpp`、`src/repl/repl.cpp`）
 
-- 主节点通过 `--role primary --peer host:port` 配置，写操作先写入 `<dbpath>.binlog`
-  再异步推送到备节点的服务端口 +1。
-- 备节点通过 `--role secondary` 监听该端口，收到记录后经记录层回放。
-- 属于教学实现：无选举、无冲突检测，主节点写入后立即复制（不等事务提交）。
+- 单节点可用 `--role primary`；副本集用 `--peers host:port,host:port` 配置成员
+  （副本端口为服务端口+1）。
+- 基于 term 的心跳与多数派投票选举，只有 leader 接受写入， follower 返回 `EDB_QUIESCED`。
+- 事务提交时走两阶段提交：leader 发送 PREPARE，收集投票后发送 COMMIT/ABORT；
+  备节点把决策写入 `<dbpath>.2pc` 后回放，保证复制的原子性。
 
-> 说明：这是教学/实验性质的数据库，上述功能在主流程上可用，但不具备生产级数据库的
-> 完整性（如两阶段提交、MVCC、副本集选举、复杂查询优化等）
-局限：教学级实现——无 MVCC/两阶段提交、无副本集选举与冲突检测，复制在写入时立即发送而非等事务提交。
+> 说明：已具备 MVCC、两阶段提交、副本集选举和提交时复制等核心机制，但仍是精简实现：
+> 2PC 为阻塞式（无超时协调者恢复）、副本集成员需静态配置、无日志压缩与在线加节点、
+> MVCC 版本链未做垃圾回收，查询优化器仅做索引/全表扫描二选一。
