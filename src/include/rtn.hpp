@@ -35,6 +35,11 @@ public :
    int rtnFind ( bson::BSONObj &inRecord, bson::BSONObj &outRecord ) ;
    int rtnRemove ( bson::BSONObj &record ) ;
    int explain ( const bson::BSONObj &query, bson::BSONObj &result ) ;
+   int rebuildVersions ( class mvsManager *mvs ) ;
+private :
+   int insertRaw ( bson::BSONObj &record ) ;
+   int removeRaw ( bson::BSONObj &record ) ;
+   int findRaw ( bson::BSONObj &inRecord, bson::BSONObj &outRecord ) ;
 } ;
 
 #endif

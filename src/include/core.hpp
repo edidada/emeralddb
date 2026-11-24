@@ -83,5 +83,6 @@
 #define EDB_HEADER_INVALID                              -15
 #define EDB_IXM_ID_NOT_EXIST                            -16
 #define EDB_NO_ID                                       -17
+#define EDB_CONFLICT                                    -18
 
 #endif

@@ -79,6 +79,9 @@ int ICommand::getError(int code)
       case EDB_NO_ID:
          std::cout << "_id is needed" << std::endl;
          break;
+      case EDB_CONFLICT:
+         std::cout << "write conflict, transaction aborted" << std::endl;
+         break;
       case EDB_QUERY_INVALID_ARGUMENT:
          std::cout << "invalid query argument" << std::endl;
          break;

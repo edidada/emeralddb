@@ -105,11 +105,6 @@ static int pmdProcessAgentRequest ( char *pReceiveBuffer,
                }
             }
             rc = rtnMgr->rtnInsert ( insertor ) ;
-            if ( EDB_OK == rc )
-            {
-               pmdGetKRCB()->getReplMgr()->replicate ( REPL_OP_INSERT,
-                                                        insertor ) ;
-            }
          }
          catch ( std::exception &e )
          {
@@ -176,11 +171,6 @@ static int pmdProcessAgentRequest ( char *pReceiveBuffer,
             }
          }
          rc = rtnMgr->rtnRemove ( recordID ) ;
-         if ( EDB_OK == rc )
-         {
-            pmdGetKRCB()->getReplMgr()->replicate ( REPL_OP_DELETE,
-                                                     recordID ) ;
-         }
       }
       else if ( OP_SNAPSHOT == opCode )
       {
@@ -221,7 +211,9 @@ static int pmdProcessAgentRequest ( char *pReceiveBuffer,
       else if ( OP_TXN_BEGIN == opCode )
       {
          int txnID = 0 ;
-         rc = pmdGetKRCB()->getTxnMgr()->begin ( txnID ) ;
+         EDB_KRCB *krcb = pmdGetKRCB () ;
+         rc = krcb->getTxnMgr()->begin (
+                 txnID, krcb->getMvsMgr()->currentTS() ) ;
          if ( EDB_OK == rc )
          {
             cb->setTxnID ( txnID ) ;
@@ -232,7 +224,9 @@ static int pmdProcessAgentRequest ( char *pReceiveBuffer,
       {
          if ( cb->isInTxn() )
          {
-            rc = pmdGetKRCB()->getTxnMgr()->commit ( cb->getTxnID() ) ;
+            EDB_KRCB *krcb = pmdGetKRCB () ;
+            rc = krcb->getTxnMgr()->commit (
+                    cb->getTxnID(), krcb->getMvsMgr(), rtnMgr ) ;
             cb->setInTxn ( false ) ;
          }
          else
@@ -330,6 +324,7 @@ int pmdAgentEntryPoint ( pmdEDUCB *cb, void *arg )
    int packetLength      = 0 ;
    EDUID myEDUID         = cb->getID () ;
    pmdEDUMgr *eduMgr     = cb->getEDUMgr() ;
+   pmdSetCurrentEDU ( cb ) ;
 
    // receive socket from argument
    SOCKET s              = static_cast<SOCKET>( reinterpret_cast<size_t>( arg ) ) ;

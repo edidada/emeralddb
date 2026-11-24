@@ -16,6 +16,7 @@
 #include <cstdio>
 #include "core.hpp"
 #include "bson.h"
+#include "mvs.hpp"
 
 #define TXN_WAL_MAGIC "EDBWAL01"
 #define TXN_WAL_VERSION 1
@@ -41,7 +42,10 @@ private :
    FILE *_wal ;
    int _nextTxnID ;
    std::map<int, std::vector<std::pair<int, std::string> > > _undo ;
+   std::map<int, std::vector<mvsWriteOp> > _writes ;
+   std::map<int, uint64_t> _snapshots ;
    bool _recovering ;
+   bool _applying ;
    std::string _walPath ;
 public :
    txnManager ()
@@ -49,6 +53,7 @@ public :
       _wal = NULL ;
       _nextTxnID = 1 ;
       _recovering = false ;
+      _applying = false ;
    }
    ~txnManager ()
    {
@@ -58,10 +63,16 @@ public :
       }
    }
    int initialize ( const char *walPath ) ;
-   int recover ( rtn *rtnMgr ) ;
-   int begin ( int &txnID ) ;
+   int recover ( rtn *rtnMgr, mvsManager *mvs ) ;
+   bool isApplying () const
+   {
+      return _applying || _recovering ;
+   }
+   int begin ( int &txnID, uint64_t snapshot ) ;
    int logOperation ( int txnID, int op, const bson::BSONObj &record ) ;
-   int commit ( int txnID ) ;
+   int stageWrite ( int txnID, int op, const bson::BSONObj &record ) ;
+   uint64_t getSnapshot ( int txnID ) ;
+   int commit ( int txnID, mvsManager *mvs, rtn *rtnMgr ) ;
    int rollback ( int txnID, rtn *rtnMgr ) ;
    bool isRecovering () const
    {

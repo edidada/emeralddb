@@ -18,6 +18,7 @@
 #include "pd.hpp"
 #include "pmd.hpp"
 #include "qry.hpp"
+#include "mvs.hpp"
 
 using namespace bson ;
 
@@ -80,21 +81,15 @@ error :
    goto done ;
 }
 
-int rtn::rtnInsert ( BSONObj &record )
+int rtn::insertRaw ( BSONObj &record )
 {
    int rc = EDB_OK ;
    dmsRecordID recordID ;
    BSONObj outRecord ;
-   // check if _id exists
    rc = _ixmBucketMgr->isIDExist ( record ) ;
    PD_RC_CHECK ( rc, PDERROR, "Failed to call isIDExist, rc = %d", rc ) ;
-   // write data into file
    rc = _dmsFile->insert ( record, outRecord, recordID ) ;
-   if ( rc )
-   {
-      PD_LOG ( PDERROR, "Failed to call dms insert, rc = %d", rc ) ;
-      goto error ;
-   }
+   PD_RC_CHECK ( rc, PDERROR, "Failed to call dms insert, rc = %d", rc ) ;
    rc = _ixmBucketMgr->createIndex ( outRecord, recordID ) ;
    PD_RC_CHECK ( rc, PDERROR, "Failed to call ixmCreateIndex, rc = %d", rc ) ;
 done :
@@ -103,13 +98,26 @@ error :
    goto done ;
 }
 
-int rtn::rtnFind ( BSONObj &inRecord, BSONObj &outRecord )
+int rtn::removeRaw ( BSONObj &record )
+{
+   int rc = EDB_OK ;
+   dmsRecordID recordID ;
+   rc = _ixmBucketMgr->removeIndex ( record, recordID ) ;
+   PD_RC_CHECK ( rc, PDERROR, "Failed to call ixm removeIndex, rc = %d", rc ) ;
+   rc = _dmsFile->remove ( recordID ) ;
+   PD_RC_CHECK ( rc, PDERROR, "Failed to call dms remove, rc = %d", rc ) ;
+done :
+   return rc ;
+error :
+   goto done ;
+}
+
+int rtn::findRaw ( BSONObj &inRecord, BSONObj &outRecord )
 {
    int rc = EDB_OK ;
    dmsRecordID recordID ;
    if ( !qry::hasIdLookup ( inRecord ) )
    {
-      // no usable index: the optimizer picks a full table scan
       int matches = 0 ;
       rc = _dmsFile->scan ( inRecord, outRecord, matches ) ;
       PD_RC_CHECK ( rc, PDERROR, "Failed to scan records, rc = %d", rc ) ;
@@ -125,6 +133,101 @@ error :
    goto done ;
 }
 
+int rtn::rtnInsert ( BSONObj &record )
+{
+   EDB_KRCB *krcb = pmdGetKRCB () ;
+   txnManager *txn = krcb->getTxnMgr () ;
+   pmdEDUCB *cb = pmdGetCurrentEDU () ;
+   if ( txn->isApplying() )
+   {
+      return insertRaw ( record ) ;
+   }
+   if ( cb && cb->isInTxn() )
+   {
+      return txn->stageWrite ( cb->getTxnID(), TXN_OP_INSERT, record ) ;
+   }
+   mvsWriteOp write ;
+   write.key  = mvsKeyOf ( record ) ;
+   write.op   = 1 ;
+   write.data.assign ( record.objdata(), record.objsize() ) ;
+   std::vector<mvsWriteOp> writes ( 1, write ) ;
+   mvsManager *mvs = krcb->getMvsMgr () ;
+   int rc = mvs->commit ( writes, mvs->nextTS() ) ;
+   if ( rc )
+   {
+      return rc ;
+   }
+   return insertRaw ( record ) ;
+}
+
+int rtn::rtnRemove ( BSONObj &record )
+{
+   EDB_KRCB *krcb = pmdGetKRCB () ;
+   txnManager *txn = krcb->getTxnMgr () ;
+   pmdEDUCB *cb = pmdGetCurrentEDU () ;
+   if ( txn->isApplying() )
+   {
+      return removeRaw ( record ) ;
+   }
+   if ( cb && cb->isInTxn() )
+   {
+      return txn->stageWrite ( cb->getTxnID(), TXN_OP_DELETE, record ) ;
+   }
+   mvsWriteOp write ;
+   write.key  = mvsKeyOf ( record ) ;
+   write.op   = 2 ;
+   write.data.assign ( record.objdata(), record.objsize() ) ;
+   std::vector<mvsWriteOp> writes ( 1, write ) ;
+   mvsManager *mvs = krcb->getMvsMgr () ;
+   int rc = mvs->commit ( writes, mvs->nextTS() ) ;
+   if ( rc )
+   {
+      return rc ;
+   }
+   return removeRaw ( record ) ;
+}
+
+int rtn::rtnFind ( BSONObj &inRecord, BSONObj &outRecord )
+{
+   EDB_KRCB *krcb = pmdGetKRCB () ;
+   mvsManager *mvs = krcb->getMvsMgr () ;
+   pmdEDUCB *cb = pmdGetCurrentEDU () ;
+   uint64_t snapshot = mvs->currentTS () ;
+   if ( cb && cb->isInTxn() )
+   {
+      snapshot = krcb->getTxnMgr()->getSnapshot ( cb->getTxnID() ) ;
+   }
+   std::string key = mvsKeyOf ( inRecord ) ;
+   std::string data ;
+   if ( !key.empty() && EDB_OK == mvs->visible ( key, snapshot, data ) )
+   {
+      outRecord = BSONObj ( data.c_str() ).copy () ;
+      return EDB_OK ;
+   }
+   return findRaw ( inRecord, outRecord ) ;
+}
+
+int rtn::rebuildVersions ( mvsManager *mvs )
+{
+   std::vector<std::string> records ;
+   _dmsFile->getAll ( records ) ;
+   std::vector<mvsWriteOp> writes ;
+   for ( size_t i = 0 ; i < records.size() ; ++i )
+   {
+      BSONObj record ( records[i].c_str() ) ;
+      mvsWriteOp write ;
+      write.key = mvsKeyOf ( record ) ;
+      write.op  = 1 ;
+      write.data = records[i] ;
+      writes.push_back ( write ) ;
+   }
+   if ( writes.empty() )
+   {
+      return EDB_OK ;
+   }
+   return mvs->commit ( writes, mvs->nextTS() ) ;
+}
+
 int rtn::explain ( const BSONObj &query, BSONObj &result )
 {
    BSONObjBuilder builder ;
@@ -136,16 +239,3 @@ int rtn::explain ( const BSONObj &query, BSONObj &result )
    return EDB_OK ;
 }
 
-int rtn::rtnRemove ( BSONObj &record )
-{
-   int rc = EDB_OK ;
-   dmsRecordID recordID ;
-   rc = _ixmBucketMgr->removeIndex ( record, recordID ) ;
-   PD_RC_CHECK ( rc, PDERROR, "Failed to call ixm removeIndex, rc = %d", rc ) ;
-   rc = _dmsFile->remove ( recordID ) ;
-   PD_RC_CHECK ( rc, PDERROR, "Failed to call dms remove, rc = %d", rc ) ;
-done :
-   return rc ;
-error :
-   goto done ;
-}

@@ -121,6 +121,7 @@ public :
    // full table scan with a query predicate (used when no _id index applies)
    int scan ( const bson::BSONObj &query, bson::BSONObj &result, int &matches ) ;
    unsigned int getRecordCount () ;
+   int getAll ( std::vector<std::string> &records ) ;
 private :
    // create a new segment for the current file
    int _extendSegment () ;

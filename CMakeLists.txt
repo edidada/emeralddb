@@ -57,6 +57,7 @@ add_executable(emeralddb
    "${SRC_DIR}/txn/txn.cpp"
    "${SRC_DIR}/qry/qry.cpp"
    "${SRC_DIR}/repl/repl.cpp"
+   "${SRC_DIR}/mvs/mvs.cpp"
 )
 
 add_executable(client

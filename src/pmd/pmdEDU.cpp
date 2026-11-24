@@ -155,6 +155,18 @@ done :
    return rc ;
 }
 
+static thread_local pmdEDUCB *_currentEDU = NULL ;
+
+void pmdSetCurrentEDU ( pmdEDUCB *cb )
+{
+   _currentEDU = cb ;
+}
+
+pmdEDUCB *pmdGetCurrentEDU ()
+{
+   return _currentEDU ;
+}
+
 int pmdEDUEntryPoint ( EDU_TYPES type, pmdEDUCB *cb, void *arg )
 {
    int rc = EDB_OK ;

@@ -22,6 +22,7 @@
 #include "rtn.hpp"
 #include "txn.hpp"
 #include "repl.hpp"
+#include "mvs.hpp"
 
 enum EDB_DB_STATUS
 {
@@ -52,6 +53,7 @@ private :
    rtn           _rtnMgr ;
    txnManager    _txnMgr ;
    replManager   _replMgr ;
+   mvsManager    _mvsMgr ;
 public :
    // constructor
    EDB_KRCB ()
@@ -82,6 +84,10 @@ public :
    replManager *getReplMgr()
    {
       return &_replMgr ;
+   }
+   mvsManager *getMvsMgr()
+   {
+      return &_mvsMgr ;
    }
    // get database status
    inline EDB_DB_STATUS getDBStatus ()

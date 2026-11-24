@@ -636,6 +636,40 @@ int dmsFile::scan ( const BSONObj &query, BSONObj &result, int &matches )
    return rc ;
 }
 
+int dmsFile::getAll ( std::vector<std::string> &records )
+{
+   _mutex.get_shared () ;
+   for ( PAGEID pageID = 0 ; pageID < getNumPages() ; ++pageID )
+   {
+      char *page = pageToOffset ( pageID ) ;
+      if ( !page )
+      {
+         continue ;
+      }
+      dmsPageHeader *header = (dmsPageHeader*)page ;
+      SLOTID numSlots = (SLOTID)header->_numSlots ;
+      for ( SLOTID s = 0 ; s < numSlots ; ++s )
+      {
+         SLOTOFF slot = *(SLOTOFF*)( page + sizeof(dmsPageHeader) +
+                                     s*sizeof(SLOTID) ) ;
+         if ( DMS_SLOT_EMPTY == slot )
+         {
+            continue ;
+         }
+         dmsRecord *record = (dmsRecord*)( page + slot ) ;
+         if ( DMS_RECORD_FLAG_DROPPED == record->_flag )
+         {
+            continue ;
+         }
+         std::string image ( page + slot + sizeof(dmsRecord),
+                             record->_size - sizeof(dmsRecord) ) ;
+         records.push_back ( image ) ;
+      }
+   }
+   _mutex.release_shared () ;
+   return EDB_OK ;
+}
+
 unsigned int dmsFile::getRecordCount ()
 {
    unsigned int count = 0 ;

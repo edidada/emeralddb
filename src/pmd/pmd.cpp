@@ -32,13 +32,29 @@ int EDB_KRCB::init ( pmdOptions *options )
    {
       return rc ;
    }
+   std::string mvsPath = std::string ( getDataFilePath() ) + ".mvs" ;
+   rc = _mvsMgr.initialize ( mvsPath.c_str() ) ;
+   if ( rc )
+   {
+      return rc ;
+   }
+   std::vector<std::string> versions ;
+   _mvsMgr.getAll ( versions ) ;
+   if ( versions.empty() )
+   {
+      rc = _rtnMgr.rebuildVersions ( &_mvsMgr ) ;
+      if ( rc )
+      {
+         return rc ;
+      }
+   }
    std::string walPath = std::string ( getDataFilePath() ) + ".wal" ;
    rc = _txnMgr.initialize ( walPath.c_str() ) ;
    if ( rc )
    {
       return rc ;
    }
-   rc = _txnMgr.recover ( &_rtnMgr ) ;
+   rc = _txnMgr.recover ( &_rtnMgr, &_mvsMgr ) ;
    if ( rc )
    {
       return rc ;

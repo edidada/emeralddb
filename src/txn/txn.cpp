@@ -29,10 +29,12 @@ int txnManager::initialize ( const char *walPath )
    return EDB_OK ;
 }
 
-int txnManager::begin ( int &txnID )
+int txnManager::begin ( int &txnID, uint64_t snapshot )
 {
    txnID = _nextTxnID++ ;
    _undo[txnID] = std::vector<std::pair<int, std::string> > () ;
+   _writes[txnID] = std::vector<mvsWriteOp> () ;
+   _snapshots[txnID] = snapshot ;
    txnWalHeader header ;
    header.length  = sizeof(header) ;
    header.op      = TXN_OP_BEGIN ;
@@ -62,24 +64,72 @@ int txnManager::logOperation ( int txnID, int op, const bson::BSONObj &record )
    {
       return EDB_IO ;
    }
-   std::string image ( record.objdata(), dataLen ) ;
-   _undo[txnID].push_back ( std::make_pair ( op, image ) ) ;
    return EDB_OK ;
 }
 
-int txnManager::commit ( int txnID )
+int txnManager::stageWrite ( int txnID, int op, const bson::BSONObj &record )
 {
+   int rc = logOperation ( txnID, op, record ) ;
+   if ( rc )
+   {
+      return rc ;
+   }
+   mvsWriteOp write ;
+   write.key  = mvsKeyOf ( record ) ;
+   write.op   = ( TXN_OP_DELETE == op ) ? 2 : 1 ;
+   write.data.assign ( record.objdata(), record.objsize() ) ;
+   _writes[txnID].push_back ( write ) ;
+   return EDB_OK ;
+}
+
+uint64_t txnManager::getSnapshot ( int txnID )
+{
+   std::map<int, uint64_t>::iterator it = _snapshots.find ( txnID ) ;
+   return it == _snapshots.end() ? 0 : it->second ;
+}
+
+int txnManager::commit ( int txnID, mvsManager *mvs, rtn *rtnMgr )
+{
+   std::vector<mvsWriteOp> &writes = _writes[txnID] ;
+   int rc = mvs->checkConflicts ( writes, _snapshots[txnID] ) ;
+   if ( rc )
+   {
+      rollback ( txnID, rtnMgr ) ;
+      return rc ;
+   }
+   uint64_t ts = mvs->nextTS () ;
+   rc = mvs->commit ( writes, ts ) ;
+   if ( rc )
+   {
+      return rc ;
+   }
    txnWalHeader header ;
    header.length = sizeof(header) ;
    header.op     = TXN_OP_COMMIT ;
    header.txnID  = txnID ;
-   if ( !_wal ||
-        fwrite ( &header, sizeof(header), 1, _wal ) != 1 ||
-        fflush ( _wal ) )
+   if ( _wal )
    {
-      return EDB_IO ;
+      fwrite ( &header, sizeof(header), 1, _wal ) ;
+      fflush ( _wal ) ;
    }
+   // version store is durable; apply the committed images to the storage engine
+   _applying = true ;
+   for ( size_t i = 0 ; i < writes.size() ; ++i )
+   {
+      bson::BSONObj record ( writes[i].data.c_str() ) ;
+      if ( 1 == writes[i].op )
+      {
+         rtnMgr->rtnInsert ( record ) ;
+      }
+      else
+      {
+         rtnMgr->rtnRemove ( record ) ;
+      }
+   }
+   _applying = false ;
    _undo.erase ( txnID ) ;
+   _writes.erase ( txnID ) ;
+   _snapshots.erase ( txnID ) ;
    return EDB_OK ;
 }
 
@@ -94,29 +144,14 @@ int txnManager::rollback ( int txnID, rtn *rtnMgr )
       fwrite ( &header, sizeof(header), 1, _wal ) ;
       fflush ( _wal ) ;
    }
-   std::vector<std::pair<int, std::string> > &operations = _undo[txnID] ;
-   for ( int i = (int)operations.size() - 1 ; i >= 0 ; --i )
-   {
-      bson::BSONObj record ( operations[i].second.c_str() ) ;
-      int rc = EDB_OK ;
-      if ( TXN_OP_INSERT == operations[i].first )
-      {
-         rc = rtnMgr->rtnRemove ( record ) ;
-      }
-      else if ( TXN_OP_DELETE == operations[i].first )
-      {
-         rc = rtnMgr->rtnInsert ( record ) ;
-      }
-      if ( rc && rc != EDB_IXM_ID_NOT_EXIST && rc != EDB_IXM_ID_EXIST )
-      {
-         PD_LOG ( PDERROR, "Failed to undo operation, rc = %d", rc ) ;
-      }
-   }
+   // writes are staged only, so discarding them is sufficient
    _undo.erase ( txnID ) ;
+   _writes.erase ( txnID ) ;
+   _snapshots.erase ( txnID ) ;
    return EDB_OK ;
 }
 
-int txnManager::recover ( rtn *rtnMgr )
+int txnManager::recover ( rtn *rtnMgr, mvsManager *mvs )
 {
    if ( !_wal )
    {
@@ -169,7 +204,10 @@ int txnManager::recover ( rtn *rtnMgr )
       records.push_back ( rec ) ;
    }
    _recovering = true ;
-   // redo committed transactions in log order
+   // Only committed transactions are replayed. Uncommitted writes were staged
+   // and never applied to the version store or the storage engine, so there
+   // is nothing to undo.
+   std::map<int, std::vector<mvsWriteOp> > recovered ;
    for ( size_t i = 0 ; i < records.size() ; ++i )
    {
       bool isCommitted = false ;
@@ -187,66 +225,31 @@ int txnManager::recover ( rtn *rtnMgr )
          continue ;
       }
       bson::BSONObj record ( records[i].image.c_str() ) ;
-      bson::BSONObj out ;
-      int rc = EDB_OK ;
-      if ( TXN_OP_INSERT == records[i].op )
-      {
-         if ( EDB_IXM_ID_NOT_EXIST == rtnMgr->rtnFind ( record, out ) )
-         {
-            rc = rtnMgr->rtnInsert ( record ) ;
-         }
-      }
-      else
-      {
-         bson::BSONObj out ;
-         if ( EDB_OK == rtnMgr->rtnFind ( record, out ) )
-         {
-            rc = rtnMgr->rtnRemove ( record ) ;
-         }
-      }
-      if ( rc )
-      {
-         PD_LOG ( PDERROR, "Failed to redo WAL operation, rc = %d", rc ) ;
-      }
+      mvsWriteOp write ;
+      write.key  = mvsKeyOf ( record ) ;
+      write.op   = ( TXN_OP_DELETE == records[i].op ) ? 2 : 1 ;
+      write.data = records[i].image ;
+      recovered[records[i].txnID].push_back ( write ) ;
    }
-   // undo transactions that never committed, in reverse log order
-   for ( int i = (int)records.size() - 1 ; i >= 0 ; --i )
+   for ( std::map<int, std::vector<mvsWriteOp> >::iterator it =
+            recovered.begin() ; it != recovered.end() ; ++it )
    {
-      bool isCommitted = false ;
-      for ( size_t j = 0 ; j < committed.size() ; ++j )
+      uint64_t ts = mvs->nextTS () ;
+      mvs->commit ( it->second, ts ) ;
+      _applying = true ;
+      for ( size_t i = 0 ; i < it->second.size() ; ++i )
       {
-         if ( committed[j] == records[i].txnID )
+         bson::BSONObj record ( it->second[i].data.c_str() ) ;
+         if ( 1 == it->second[i].op )
          {
-            isCommitted = true ;
-            break ;
+            rtnMgr->rtnInsert ( record ) ;
+         }
+         else
+         {
+            rtnMgr->rtnRemove ( record ) ;
          }
       }
-      if ( isCommitted ||
-           ( TXN_OP_INSERT != records[i].op && TXN_OP_DELETE != records[i].op ) )
-      {
-         continue ;
-      }
-      bson::BSONObj record ( records[i].image.c_str() ) ;
-      bson::BSONObj out ;
-      int rc = EDB_OK ;
-      if ( TXN_OP_INSERT == records[i].op )
-      {
-         if ( EDB_OK == rtnMgr->rtnFind ( record, out ) )
-         {
-            rc = rtnMgr->rtnRemove ( record ) ;
-         }
-      }
-      else
-      {
-         if ( EDB_IXM_ID_NOT_EXIST == rtnMgr->rtnFind ( record, out ) )
-         {
-            rc = rtnMgr->rtnInsert ( record ) ;
-         }
-      }
-      if ( rc )
-      {
-         PD_LOG ( PDERROR, "Failed to undo WAL operation, rc = %d", rc ) ;
-      }
+      _applying = false ;
    }
    _recovering = false ;
    // restart the log from a clean header
