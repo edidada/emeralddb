@@ -55,3 +55,7 @@ jobs:
       - name: Build with CMake
         shell: bash
         run: cmake --build build -j4
+
+      - name: Smoke test
+        shell: bash
+        run: bash test/smoke.sh ./build/emeralddb ./build/client
