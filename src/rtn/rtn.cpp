@@ -146,18 +146,8 @@ int rtn::rtnInsert ( BSONObj &record )
    {
       return txn->stageWrite ( cb->getTxnID(), TXN_OP_INSERT, record ) ;
    }
-   mvsWriteOp write ;
-   write.key  = mvsKeyOf ( record ) ;
-   write.op   = 1 ;
-   write.data.assign ( record.objdata(), record.objsize() ) ;
-   std::vector<mvsWriteOp> writes ( 1, write ) ;
-   mvsManager *mvs = krcb->getMvsMgr () ;
-   int rc = mvs->commit ( writes, mvs->nextTS() ) ;
-   if ( rc )
-   {
-      return rc ;
-   }
-   return insertRaw ( record ) ;
+   return txn->autoCommit ( TXN_OP_INSERT, record,
+                            krcb->getMvsMgr(), this ) ;
 }
 
 int rtn::rtnRemove ( BSONObj &record )
@@ -173,18 +163,8 @@ int rtn::rtnRemove ( BSONObj &record )
    {
       return txn->stageWrite ( cb->getTxnID(), TXN_OP_DELETE, record ) ;
    }
-   mvsWriteOp write ;
-   write.key  = mvsKeyOf ( record ) ;
-   write.op   = 2 ;
-   write.data.assign ( record.objdata(), record.objsize() ) ;
-   std::vector<mvsWriteOp> writes ( 1, write ) ;
-   mvsManager *mvs = krcb->getMvsMgr () ;
-   int rc = mvs->commit ( writes, mvs->nextTS() ) ;
-   if ( rc )
-   {
-      return rc ;
-   }
-   return removeRaw ( record ) ;
+   return txn->autoCommit ( TXN_OP_DELETE, record,
+                            krcb->getMvsMgr(), this ) ;
 }
 
 int rtn::rtnFind ( BSONObj &inRecord, BSONObj &outRecord )

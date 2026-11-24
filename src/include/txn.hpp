@@ -71,6 +71,8 @@ public :
    int begin ( int &txnID, uint64_t snapshot ) ;
    int logOperation ( int txnID, int op, const bson::BSONObj &record ) ;
    int stageWrite ( int txnID, int op, const bson::BSONObj &record ) ;
+   int autoCommit ( int op, const bson::BSONObj &record,
+                    mvsManager *mvs, rtn *rtnMgr ) ;
    uint64_t getSnapshot ( int txnID ) ;
    int commit ( int txnID, mvsManager *mvs, rtn *rtnMgr ) ;
    int rollback ( int txnID, rtn *rtnMgr ) ;

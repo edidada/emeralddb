@@ -4,6 +4,7 @@
 #include "txn.hpp"
 #include "pd.hpp"
 #include "rtn.hpp"
+#include "pmd.hpp"
 
 int txnManager::initialize ( const char *walPath )
 {
@@ -97,6 +98,14 @@ int txnManager::commit ( int txnID, mvsManager *mvs, rtn *rtnMgr )
       rollback ( txnID, rtnMgr ) ;
       return rc ;
    }
+   // Phase 1: ask the replica to prepare. If it votes no, abort locally.
+   replManager *repl = pmdGetKRCB()->getReplMgr() ;
+   rc = repl->prepare ( txnID, writes ) ;
+   if ( rc )
+   {
+      rollback ( txnID, rtnMgr ) ;
+      return rc ;
+   }
    uint64_t ts = mvs->nextTS () ;
    rc = mvs->commit ( writes, ts ) ;
    if ( rc )
@@ -127,6 +136,8 @@ int txnManager::commit ( int txnID, mvsManager *mvs, rtn *rtnMgr )
       }
    }
    _applying = false ;
+   // Phase 2: tell the replica to commit the prepared transaction.
+   repl->commitTxn ( txnID ) ;
    _undo.erase ( txnID ) ;
    _writes.erase ( txnID ) ;
    _snapshots.erase ( txnID ) ;
@@ -145,10 +156,29 @@ int txnManager::rollback ( int txnID, rtn *rtnMgr )
       fflush ( _wal ) ;
    }
    // writes are staged only, so discarding them is sufficient
+   pmdGetKRCB()->getReplMgr()->abortTxn ( txnID ) ;
    _undo.erase ( txnID ) ;
    _writes.erase ( txnID ) ;
    _snapshots.erase ( txnID ) ;
    return EDB_OK ;
+}
+
+int txnManager::autoCommit ( int op, const bson::BSONObj &record,
+                             mvsManager *mvs, rtn *rtnMgr )
+{
+   int txnID = 0 ;
+   int rc = begin ( txnID, mvs->currentTS() ) ;
+   if ( rc )
+   {
+      return rc ;
+   }
+   rc = stageWrite ( txnID, op, record ) ;
+   if ( rc )
+   {
+      rollback ( txnID, rtnMgr ) ;
+      return rc ;
+   }
+   return commit ( txnID, mvs, rtnMgr ) ;
 }
 
 int txnManager::recover ( rtn *rtnMgr, mvsManager *mvs )
